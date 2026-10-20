@@ -8,7 +8,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Ẩn các thành phần thừa của Streamlit
+# Ẩn giao diện thừa của Streamlit
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -30,40 +30,39 @@ html_code = """
         /* ---------------- GIAO DIỆN BẮT ĐẦU (MAIN MENU) ---------------- */
         #main-menu {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle, rgba(26,26,41,0.85) 0%, rgba(10,10,15,0.98) 100%);
+            background: radial-gradient(circle, rgba(26,26,41,0.92) 0%, rgba(10,10,15,0.98) 100%);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            z-index: 100; backdrop-filter: blur(8px); transition: opacity 0.5s ease;
+            z-index: 100; backdrop-filter: blur(8px); transition: opacity 0.4s ease;
         }
         
         .game-title {
-            font-size: 56px; font-weight: 900; color: #4cd137;
-            text-transform: uppercase; letter-spacing: 6px;
-            text-shadow: 0 0 20px rgba(76, 209, 55, 0.6), 0 0 40px rgba(76, 209, 55, 0.2);
-            margin-bottom: 10px; animation: pulse 2s infinite alternate;
+            font-size: 52px; font-weight: 900; color: #4cd137;
+            text-transform: uppercase; letter-spacing: 5px;
+            text-shadow: 0 0 20px rgba(76, 209, 55, 0.6);
+            margin-bottom: 8px; text-align: center;
         }
         
         .game-subtitle {
-            font-size: 18px; color: #a4b0be; margin-bottom: 40px; letter-spacing: 2px;
+            font-size: 16px; color: #a4b0be; margin-bottom: 35px; letter-spacing: 2px; text-align: center;
         }
 
         .menu-btn-container {
-            display: flex; flex-direction: column; gap: 18px; width: 280px;
+            display: flex; flex-direction: column; gap: 15px; width: 280px;
         }
 
         .menu-btn {
-            padding: 15px 25px; font-size: 18px; font-weight: bold;
+            padding: 14px 20px; font-size: 17px; font-weight: bold;
             color: #ffffff; background: rgba(255, 255, 255, 0.05);
             border: 2px solid #4cd137; border-radius: 8px; cursor: pointer;
-            transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px;
-            box-shadow: 0 0 10px rgba(76, 209, 55, 0.1);
+            transition: all 0.25s ease; text-transform: uppercase; letter-spacing: 1px;
         }
 
         .menu-btn:hover {
             background: #4cd137; color: #000000;
-            box-shadow: 0 0 25px rgba(76, 209, 55, 0.8); transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(76, 209, 55, 0.8); transform: translateY(-2px);
         }
 
-        /* ---------------- POPUP MODALS (HƯỚNG DẪN / CHỌN MÀN) ---------------- */
+        /* ---------------- POPUP MODALS ---------------- */
         .modal-overlay {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(0, 0, 0, 0.85); display: none; justify-content: center;
@@ -72,18 +71,18 @@ html_code = """
 
         .modal-card {
             background: #1e1e2e; border: 2px solid #4cd137; border-radius: 12px;
-            padding: 30px; width: 500px; max-width: 90%; color: #fff;
+            padding: 25px; width: 480px; max-width: 90%; color: #fff;
             box-shadow: 0 0 30px rgba(0, 0, 0, 0.8); text-align: center;
         }
 
-        .modal-card h2 { color: #4cd137; margin-top: 0; font-size: 28px; }
+        .modal-card h2 { color: #4cd137; margin-top: 0; font-size: 26px; }
 
         .level-grid {
-            display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 20px 0;
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0;
         }
 
         .level-btn {
-            padding: 15px 0; font-size: 18px; font-weight: bold;
+            padding: 12px 0; font-size: 18px; font-weight: bold;
             background: #2f3542; color: #fff; border: 1px solid #747d8c;
             border-radius: 6px; cursor: pointer; transition: 0.2s;
         }
@@ -92,49 +91,42 @@ html_code = """
 
         .close-btn {
             background: #e84118; color: white; border: none; padding: 10px 20px;
-            border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 15px;
+            border-radius: 6px; cursor: pointer; font-size: 15px; margin-top: 10px;
         }
 
-        /* ---------------- GAME IN-PLAY UI ---------------- */
-        #blocker {
-            position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.7);
-            display: none; flex-direction: column; justify-content: center;
-            align-items: center; color: white; z-index: 50;
-        }
-        #instructions-click {
-            font-size: 22px; text-align: center; cursor: pointer; padding: 25px 40px;
-            background: rgba(255,255,255,0.05); border-radius: 10px; border: 2px solid #4cd137;
-            box-shadow: 0 0 20px rgba(76, 209, 55, 0.3);
-        }
-
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: #fff; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; }
-        
+        /* ---------------- GAME IN-PLAY HUD ---------------- */
         #hud {
-            position: absolute; top: 20px; left: 20px; color: #4cd137; font-size: 16px;
-            pointer-events: none; z-index: 10; background: rgba(0,0,0,0.65);
-            padding: 15px; border-radius: 8px; border: 1px solid rgba(76, 209, 55, 0.3);
+            position: absolute; top: 15px; left: 15px; color: #4cd137; font-size: 15px;
+            pointer-events: none; z-index: 10; background: rgba(0,0,0,0.75);
+            padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(76, 209, 55, 0.4);
         }
 
         .menu-hud-btn {
-            pointer-events: auto; margin-top: 10px; background: rgba(255,255,255,0.1);
-            color: #fff; border: 1px solid #aaa; padding: 5px 10px; border-radius: 4px; cursor: pointer;
+            pointer-events: auto; margin-top: 10px; background: rgba(255,255,255,0.15);
+            color: #fff; border: 1px solid #aaa; padding: 6px 12px; border-radius: 4px; cursor: pointer;
+            font-size: 13px;
         }
         .menu-hud-btn:hover { background: #e84118; border-color: #e84118; }
 
-        #toast { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fbc531; padding: 10px 25px; font-size: 18px; border-radius: 20px; border: 1px solid #fbc531; display: none; z-index: 10; }
+        #controls-hint {
+            position: absolute; bottom: 15px; right: 15px; color: rgba(255,255,255,0.7);
+            font-size: 13px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px;
+            pointer-events: none; z-index: 10;
+        }
+
+        #toast { 
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); 
+            background: rgba(0,0,0,0.9); color: #fbc531; padding: 10px 25px; font-size: 16px; 
+            border-radius: 20px; border: 1px solid #fbc531; display: none; z-index: 20; 
+        }
 
         /* Keypad UI Modal */
         #keypad-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a1a; padding: 20px; border-radius: 10px; border: 2px solid #4cd137; display: none; z-index: 80; text-align: center; }
-        #keypad-display { background: #000; color: #4cd137; font-size: 30px; margin-bottom: 15px; padding: 10px; letter-spacing: 5px; border-radius: 5px; font-family: monospace; }
+        #keypad-display { background: #000; color: #4cd137; font-size: 28px; margin-bottom: 15px; padding: 10px; letter-spacing: 5px; border-radius: 5px; font-family: monospace; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .btn { padding: 15px; font-size: 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .btn { padding: 12px; font-size: 18px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
         .btn:hover { background: #555; }
         .btn-ok { background: #27ae60; } .btn-clear { background: #c0392b; }
-
-        @keyframes pulse {
-            0% { transform: scale(1); text-shadow: 0 0 20px rgba(76, 209, 55, 0.6); }
-            100% { transform: scale(1.03); text-shadow: 0 0 35px rgba(76, 209, 55, 0.9); }
-        }
     </style>
 </head>
 <body>
@@ -174,34 +166,26 @@ html_code = """
     <div id="guide-modal" class="modal-overlay">
         <div class="modal-card">
             <h2>HƯỚNG DẪN ĐIỀU KHIỂN</h2>
-            <div style="text-align: left; line-height: 1.8; margin: 20px 0; font-size: 16px;">
-                • <b>W, A, S, D</b>: Di chuyển nhân vật<br/>
-                • <b>Di chuyển chuột</b>: Xoay góc nhìn 360°<br/>
+            <div style="text-align: left; line-height: 1.8; margin: 15px 0; font-size: 15px;">
+                • <b>W, A, S, D</b> (hoặc phím Mũi tên): Di chuyển nhân vật<br/>
+                • <b>Kéo chuột (Rê chuột)</b>: Xoay camera nhìn xung quanh<br/>
                 • <b>Phím Space</b>: Nhảy lên bục<br/>
-                • <b>Click Chuột Trái (hoặc phím E)</b>: Tương tác / Nhặt đồ / Mở cửa / Gạt cần<br/>
-                • <b>Đẩy vật thể</b>: Đi thẳng vào hộp/khối đá vật lý để đẩy
+                • <b>Click Chuột Trái vào vật thể</b>: Nhặt đồ / Mở cửa / Gạt cần / Bấm số<br/>
+                • <b>Đẩy vật thể</b>: Đi thẳng vào khối hộp vật lý để đẩy
             </div>
             <button class="close-btn" onclick="closeModal('guide-modal')">Đã hiểu</button>
         </div>
     </div>
 
-    <!-- 4. KHU VỰC GAME & HUD -->
-    <div id="blocker">
-        <div id="instructions-click">
-            <b>SẴN SÀNG CHƠI</b><br/><br/>
-            Click chuột vào đây để điều khiển góc nhìn!
-        </div>
-    </div>
-    
-    <div id="crosshair"></div>
-    
+    <!-- 4. KHU VỰC GAME HUD -->
     <div id="hud">
-        <div id="level-text">Màn: 1</div>
-        <div id="hint-text" style="max-width: 300px; margin: 5px 0;">Gợi ý: Tìm chìa khóa trên bàn.</div>
+        <div id="level-text"><b>Màn: 1</b></div>
+        <div id="hint-text" style="max-width: 280px; margin: 5px 0;">Gợi ý: Click chìa khóa trên bàn.</div>
         <div id="inventory-text">Túi đồ: Trống</div>
         <button class="menu-hud-btn" onclick="returnToMainMenu()">☰ Menu Chính</button>
     </div>
-    
+
+    <div id="controls-hint">💡 Giữ & Kéo chuột để quay góc nhìn | WASD để di chuyển</div>
     <div id="toast"></div>
 
     <!-- Keypad Modal -->
@@ -215,13 +199,12 @@ html_code = """
         </div>
     </div>
 
-    <!-- Library Scripts -->
+    <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 
     <script>
-        let camera, scene, renderer, controls, world;
+        let camera, scene, renderer, world;
         let playerBody;
         let time = Date.now();
         
@@ -233,21 +216,27 @@ html_code = """
         let hasKey = false;
         let doorMesh = null;
         let doorOpen = false;
-        
+        let isGameRunning = false;
+
+        // Mouse Drag Look variables
+        let isMouseDown = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let cameraYaw = 0, cameraPitch = 0;
+
         let keypadTarget = "";
         let keypadInput = "";
         let leverSequence = [];
         let pillarSequence = 1;
 
         const levels = [
-            { id: 1, hint: "Nhặt chìa khóa trên bàn (Click trái) và chạm cửa để mở." },
-            { id: 2, hint: "Đẩy khối hộp vật lý màu xanh đè lên công tắc màu đỏ trên sàn." },
-            { id: 3, hint: "Nhìn mã số trên tường và nhập vào bảng điều khiển (Bên phải)." },
-            { id: 4, hint: "Nhảy qua bục vật lý (Space) để lấy chìa khóa." },
-            { id: 5, hint: "Kéo 3 cần gạt theo thứ tự: Trái, Phải, Giữa." },
-            { id: 6, hint: "Phòng tối. Tìm đuốc phát sáng để thấy đường và chìa khóa." },
+            { id: 1, hint: "Click trực tiếp vào chìa khóa trên bàn để nhặt, sau đó click cửa." },
+            { id: 2, hint: "Đi thẳng đẩy khối hộp vật lý màu xanh đè lên công tắc đỏ trên sàn." },
+            { id: 3, hint: "Nhìn mã số trên tường và click vào bảng điều khiển để nhập." },
+            { id: 4, hint: "Dùng W, A, S, D và Space để nhảy qua bục lấy chìa khóa." },
+            { id: 5, hint: "Click 3 cần gạt theo thứ tự: Trái -> Phải -> Giữa." },
+            { id: 6, hint: "Phòng tối. Click đuốc để thắp sáng phòng và tìm chìa khóa." },
             { id: 7, hint: "Xếp khối hộp đè lên nhau để leo lên bục lấy chìa khóa." },
-            { id: 8, hint: "Chạm 4 cột đá theo thứ tự từ Thấp đến Cao." },
+            { id: 8, hint: "Click 4 cột đá theo thứ tự từ Thấp đến Cao." },
             { id: 9, hint: "Giải toán đố: Xanh (2) + Đỏ (5) + Vàng (1) = ? Nhập mã." },
             { id: 10, hint: "Màn cuối: Đẩy hộp vào nút, gạt cần, nhập mã 2026." }
         ];
@@ -260,9 +249,9 @@ html_code = """
             scene.background = new THREE.Color(0x0d0d11);
             scene.fog = new THREE.Fog(0x0d0d11, 0, 25);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.9);
             scene.add(ambient);
             const light = new THREE.PointLight(0xffffff, 1, 30);
             light.position.set(0, 6, 0);
@@ -273,12 +262,12 @@ html_code = """
             world.gravity.set(0, -20, 0);
             world.broadphase = new CANNON.NaiveBroadphase();
 
-            // Player Physics
-            const playerShape = new CANNON.Sphere(1.5);
+            // Player Physics Body
+            const playerShape = new CANNON.Sphere(1.2);
             playerBody = new CANNON.Body({ mass: 5 });
             playerBody.addShape(playerShape);
-            playerBody.position.set(0, 5, 5);
-            playerBody.linearDamping = 0.9;
+            playerBody.position.set(0, 3, 5);
+            playerBody.linearDamping = 0.85;
             world.addBody(playerBody);
 
             // Floor Physics
@@ -295,41 +284,32 @@ html_code = """
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // Controls
-            controls = new THREE.PointerLockControls(camera, document.body);
-            const blocker = document.getElementById('blocker');
-            const instructions = document.getElementById('instructions-click');
-
-            instructions.addEventListener('click', function () { controls.lock(); });
-            controls.addEventListener('lock', function () { blocker.style.display = 'none'; });
-            controls.addEventListener('unlock', function () {
-                if(document.getElementById('main-menu').style.display === 'none' &&
-                   document.getElementById('keypad-modal').style.display === 'none') {
-                    blocker.style.display = 'flex';
-                }
-            });
-            scene.add(controls.getObject());
-
+            // Controls listeners
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('mousedown', onMouseClick);
+            
+            // Mouse Look Drag Events
+            renderer.domElement.addEventListener('mousedown', onMouseDown);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('mouseup', onMouseUp);
+            renderer.domElement.addEventListener('click', onCanvasClick);
+
             window.addEventListener('resize', onWindowResize);
 
             loadLevel(currentLevel);
         }
 
-        /* ---------------- QUẢN LÝ GIAO DIỆN MENU ---------------- */
+        /* ---------------- QUẢN LÝ GIAO DIỆN ---------------- */
         function startNewGame() {
+            isGameRunning = true;
             document.getElementById('main-menu').style.opacity = '0';
             setTimeout(() => {
                 document.getElementById('main-menu').style.display = 'none';
-                document.getElementById('blocker').style.display = 'flex';
-            }, 500);
+            }, 400);
         }
 
         function returnToMainMenu() {
-            controls.unlock();
-            document.getElementById('blocker').style.display = 'none';
+            isGameRunning = false;
             document.getElementById('main-menu').style.display = 'flex';
             document.getElementById('main-menu').style.opacity = '1';
         }
@@ -344,24 +324,43 @@ html_code = """
             startNewGame();
         }
 
-        /* ---------------- GAMEPLAY CONTROLS ---------------- */
+        /* ---------------- ĐIỀU KHIỂN & CAMERA ---------------- */
+        function onMouseDown(e) {
+            isMouseDown = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        }
+
+        function onMouseMove(e) {
+            if (!isMouseDown || !isGameRunning) return;
+            let deltaX = e.clientX - previousMousePosition.x;
+            let deltaY = e.clientY - previousMousePosition.y;
+
+            cameraYaw -= deltaX * 0.005;
+            cameraPitch -= deltaY * 0.005;
+            cameraPitch = Math.max(-Math.PI / 2.2, Math.PI / 2.2, cameraPitch); // Limit pitch
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        }
+
+        function onMouseUp() { isMouseDown = false; }
+
         function onKeyDown(event) {
+            if (!isGameRunning) return;
             switch (event.code) {
-                case 'KeyW': moveForward = true; break;
-                case 'KeyA': moveLeft = true; break;
-                case 'KeyS': moveBackward = true; break;
-                case 'KeyD': moveRight = true; break;
-                case 'Space': if (canJump) { playerBody.velocity.y = 12; canJump = false; } break;
-                case 'KeyE': onMouseClick(); break;
+                case 'KeyW': case 'ArrowUp': moveForward = true; break;
+                case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = true; break;
+                case 'KeyD': case 'ArrowRight': moveRight = true; break;
+                case 'Space': if (canJump) { playerBody.velocity.y = 11; canJump = false; } break;
             }
         }
 
         function onKeyUp(event) {
             switch (event.code) {
-                case 'KeyW': moveForward = false; break;
-                case 'KeyA': moveLeft = false; break;
-                case 'KeyS': moveBackward = false; break;
-                case 'KeyD': moveRight = false; break;
+                case 'KeyW': case 'ArrowUp': moveForward = false; break;
+                case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = false; break;
+                case 'KeyD': case 'ArrowRight': moveRight = false; break;
             }
         }
 
@@ -369,15 +368,23 @@ html_code = """
             if(e.contact.ni.y > 0.5) canJump = true;
         });
 
-        function onMouseClick() {
-            if (!controls.isLocked) return;
+        /* ---------------- TƯƠNG TÁC RAYCASTING ---------------- */
+        function onCanvasClick(e) {
+            if (!isGameRunning) return;
+            
+            // Tính toán vị trí nhấp chuột chuẩn xác trên 3D
+            const mouse = new THREE.Vector2(
+                (e.clientX / window.innerWidth) * 2 - 1,
+                -(e.clientY / window.innerHeight) * 2 + 1
+            );
+
             const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(interactiveObjects, false);
 
             if (intersects.length > 0) {
                 const object = intersects[0].object;
-                if (intersects[0].distance > 4.5) { showToast("Đến gần hơn để tương tác!"); return; }
+                if (intersects[0].distance > 12) { showToast("Hãy đi lại gần hơn để tương tác!"); return; }
                 handleInteraction(object);
             }
         }
@@ -393,7 +400,6 @@ html_code = """
                 if (canOpen) openDoor();
                 else showToast("Cửa đã khóa! Hãy tìm cách giải đố.");
             } else if (name === "keypad") {
-                document.exitPointerLock();
                 document.getElementById('keypad-modal').style.display = 'block';
                 keypadInput = ""; document.getElementById('keypad-display').innerText = "----";
             } else if (name.startsWith("lever_")) {
@@ -406,7 +412,7 @@ html_code = """
                 if (id === pillarSequence) {
                     pillarSequence++; obj.material.color.setHex(0x4cd137); showToast(`Chạm đúng trụ ${id}!`);
                     if (pillarSequence > 4) { hasKey = true; openDoor(); }
-                } else { showToast("Sai thứ tự! Chạm từ trụ thấp nhất."); pillarSequence = 1; }
+                } else { showToast("Sai thứ tự! Chọn từ trụ thấp nhất."); pillarSequence = 1; }
             }
         }
 
@@ -416,7 +422,7 @@ html_code = """
                 if (keypadInput === keypadTarget) {
                     showToast("Mật mã ĐÚNG!"); hasKey = true; openDoor();
                 } else showToast("Mật mã SAI!");
-                document.getElementById('keypad-modal').style.display = 'none'; controls.lock();
+                document.getElementById('keypad-modal').style.display = 'none';
             } else { if (keypadInput.length < 4) keypadInput += val; }
             document.getElementById('keypad-display').innerText = keypadInput === "" ? "----" : keypadInput;
         }
@@ -449,7 +455,8 @@ html_code = """
             objectsToUpdate = []; interactiveObjects = [];
             if (doorMesh) scene.remove(doorMesh);
             hasKey = false; doorOpen = false; leverSequence = []; pillarSequence = 1;
-            playerBody.position.set(0, 5, 5); playerBody.velocity.set(0,0,0);
+            playerBody.position.set(0, 3, 5); playerBody.velocity.set(0,0,0);
+            cameraYaw = 0; cameraPitch = 0;
             updateHUD();
         }
 
@@ -536,19 +543,31 @@ html_code = """
 
         function animate() {
             requestAnimationFrame(animate);
-            if (controls.isLocked) {
+            
+            if (isGameRunning) {
                 let dt = (Date.now() - time) / 1000; world.step(1/60, dt, 3);
-                let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
-                let right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+                
+                // Cập nhật hướng xoay Camera theo góc Yaw/Pitch
+                let euler = new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ');
+                camera.quaternion.setFromEuler(euler);
+
+                // Hướng di chuyển nhân vật
+                let dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                dir.y = 0; dir.normalize();
+                let right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                right.y = 0; right.normalize();
+
                 let vX = 0, vZ = 0;
-                if (moveForward) { vX += dir.x * 20; vZ += dir.z * 20; }
-                if (moveBackward) { vX -= dir.x * 20; vZ -= dir.z * 20; }
-                if (moveLeft) { vX -= right.x * 20; vZ -= right.z * 20; }
-                if (moveRight) { vX += right.x * 20; vZ += right.z * 20; }
+                if (moveForward) { vX += dir.x * 18; vZ += dir.z * 18; }
+                if (moveBackward) { vX -= dir.x * 18; vZ -= dir.z * 18; }
+                if (moveLeft) { vX -= right.x * 18; vZ -= right.z * 18; }
+                if (moveRight) { vX += right.x * 18; vZ += right.z * 18; }
 
                 playerBody.velocity.x = vX; playerBody.velocity.z = vZ;
-                controls.getObject().position.copy(playerBody.position);
-                controls.getObject().position.y += 1;
+                
+                // Đồng bộ Camera vị trí với nhân vật
+                camera.position.copy(playerBody.position);
+                camera.position.y += 1.0;
 
                 objectsToUpdate.forEach(obj => {
                     obj.mesh.position.copy(obj.body.position);
@@ -561,9 +580,10 @@ html_code = """
                         hasKey = true; updateHUD(); showToast("Đã kích hoạt nút bấm vật lý! Cửa mở."); openDoor();
                     }
                 }
-                interactiveObjects.forEach(obj => { if(obj.name === "key") obj.rotation.y += 0.05; });
+                interactiveObjects.forEach(obj => { if(obj.name === "key") obj.rotation.y += 0.04; });
             }
-            time = Date.now(); renderer.render(scene, camera);
+            time = Date.now(); 
+            renderer.render(scene, camera);
         }
     </script>
 </body>
