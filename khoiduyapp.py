@@ -1,635 +1,479 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Cấu hình giao diện trang Streamlit
 st.set_page_config(
-    page_title="3D Escape Room Game",
-    page_icon="🚪",
+    page_title="3D Escape Room - Bàn Phím",
+    page_icon="🎮",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Ẩn thanh header/footer mặc định của Streamlit để tăng trải nghiệm chơi game
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
-        .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 0rem !important;
-            padding-left: 0rem !important;
-            padding-right: 0rem !important;
-        }
+        .block-container { padding: 0rem !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# Mã nguồn HTML / JS Game 3D
-game_html_code = """
+html_code = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Escape Room</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1a1a1a;
-            color: #fff;
-            user-select: none;
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        #blocker {
+            position: absolute; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; z-index: 10;
         }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            display: block;
-        }
-        #ui-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .hud-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(0,0,0,0.6);
-            padding: 10px 20px;
-            border-radius: 8px;
-            backdrop-filter: blur(5px);
-        }
-        .hud-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #4cd137;
-        }
-        .hud-hint {
-            background: rgba(255,255,255,0.1);
-            padding: 8px 15px;
-            border-radius: 5px;
-            font-size: 14px;
-            max-width: 350px;
-            text-align: right;
-        }
-        #keypad-modal {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(20, 20, 20, 0.95);
-            border: 2px solid #4cd137;
-            border-radius: 12px;
-            padding: 20px;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            pointer-events: auto;
-            box-shadow: 0 0 20px rgba(76, 209, 55, 0.4);
-        }
-        .keypad-display {
-            width: 100%;
-            height: 40px;
-            background: #000;
-            color: #4cd137;
-            font-family: monospace;
-            font-size: 24px;
-            text-align: center;
-            line-height: 40px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-            letter-spacing: 5px;
-        }
-        .keypad-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-        }
-        .keypad-btn {
-            width: 50px;
-            height: 50px;
-            background: #333;
-            color: #fff;
-            font-size: 18px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .keypad-btn:active {
-            background: #4cd137;
-            color: #000;
-        }
-        #message-toast {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.85);
-            color: #fbc531;
-            padding: 10px 25px;
-            border-radius: 20px;
-            font-size: 16px;
-            display: none;
-            border: 1px solid #fbc531;
-        }
-        #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 8px;
-            height: 8px;
-            background: rgba(255,255,255,0.5);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-        }
+        #instructions { font-size: 24px; text-align: center; cursor: pointer; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 2px solid #fff; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 5; }
+        #hud { position: absolute; top: 20px; left: 20px; color: #00ff00; font-size: 18px; pointer-events: none; z-index: 5; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; }
+        #toast { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: yellow; padding: 10px 20px; font-size: 18px; border-radius: 10px; display: none; z-index: 5; }
+        
+        /* Keypad UI */
+        #keypad-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; padding: 20px; border-radius: 10px; border: 2px solid #0f0; display: none; z-index: 20; text-align: center; pointer-events: auto; }
+        #keypad-display { background: #000; color: #0f0; font-size: 30px; margin-bottom: 15px; padding: 10px; letter-spacing: 5px; border-radius: 5px; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .btn { padding: 15px; font-size: 20px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .btn:hover { background: #666; }
+        .btn-ok { background: #27ae60; } .btn-clear { background: #c0392b; }
     </style>
 </head>
 <body>
-    <div id="canvas-container"></div>
-    <div id="crosshair"></div>
+    <div id="blocker">
+        <div id="instructions">
+            <b>CLICK VÀO ĐÂY ĐỂ CHƠI</b><br/><br/>
+            WASD: Di chuyển<br/>
+            Chuột: Xoay góc nhìn<br/>
+            Space: Nhảy<br/>
+            Click Chuột Trái (hoặc phím E): Tương tác vật thể
+        </div>
+    </div>
     
-    <div id="ui-overlay">
-        <div class="hud-header">
-            <div class="hud-title" id="level-title">Màn 1: Cánh cửa khởi đầu</div>
-            <div class="hud-hint" id="level-hint">Manh mối: Chạm vào chìa khóa trên bàn để mở cửa.</div>
-        </div>
-        <div id="message-toast"></div>
+    <div id="crosshair"></div>
+    <div id="hud">
+        <div id="level-text">Màn: 1</div>
+        <div id="hint-text">Gợi ý: Tìm chìa khóa trên bàn.</div>
+        <div id="inventory-text">Túi đồ: Trống</div>
     </div>
+    <div id="toast"></div>
 
-    <!-- Keypad cho màn câu đố mã số -->
     <div id="keypad-modal">
-        <div class="keypad-display" id="keypad-input">----</div>
-        <div class="keypad-grid">
-            <button class="keypad-btn" onclick="pressKey('1')">1</button>
-            <button class="keypad-btn" onclick="pressKey('2')">2</button>
-            <button class="keypad-btn" onclick="pressKey('3')">3</button>
-            <button class="keypad-btn" onclick="pressKey('4')">4</button>
-            <button class="keypad-btn" onclick="pressKey('5')">5</button>
-            <button class="keypad-btn" onclick="pressKey('6')">6</button>
-            <button class="keypad-btn" onclick="pressKey('7')">7</button>
-            <button class="keypad-btn" onclick="pressKey('8')">8</button>
-            <button class="keypad-btn" onclick="pressKey('9')">9</button>
-            <button class="keypad-btn" style="background:#e84118;" onclick="clearKeypad()">C</button>
-            <button class="keypad-btn" onclick="pressKey('0')">0</button>
-            <button class="keypad-btn" style="background:#4cd137;" onclick="submitKeypad()">OK</button>
+        <div id="keypad-display">----</div>
+        <div class="grid">
+            <button class="btn" onclick="press('1')">1</button> <button class="btn" onclick="press('2')">2</button> <button class="btn" onclick="press('3')">3</button>
+            <button class="btn" onclick="press('4')">4</button> <button class="btn" onclick="press('5')">5</button> <button class="btn" onclick="press('6')">6</button>
+            <button class="btn" onclick="press('7')">7</button> <button class="btn" onclick="press('8')">8</button> <button class="btn" onclick="press('9')">9</button>
+            <button class="btn btn-clear" onclick="press('C')">C</button> <button class="btn" onclick="press('0')">0</button> <button class="btn btn-ok" onclick="press('OK')">OK</button>
         </div>
     </div>
 
-    <!-- Import thư viện 3D & Vật lý -->
+    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 
     <script>
-        let scene, camera, renderer, controls, world;
-        let raycaster = new THREE.Raycaster();
-        let mouse = new THREE.Vector2();
+        let camera, scene, renderer, controls, world;
+        let playerBody;
+        let time = Date.now();
         
-        let currentLevel = 1;
-        let inventory = { hasKey: false, hasTorch: false };
-        let levelObjects = [];
-        let physicsBodies = [];
-        let doorMesh;
-        let isDoorOpen = false;
+        let objectsToUpdate = [];
+        let interactiveObjects = [];
+        
+        // Input state
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
 
-        const levelsData = [
-            { id: 1, title: "Màn 1: Cánh cửa khởi đầu", hint: "Chạm vào chìa khóa trên bàn để nhặt, sau đó chạm vào cửa." },
-            { id: 2, title: "Màn 2: Mật mã rương gỗ", hint: "Quan sát màu sắc các khối hộp trong phòng để tìm mã gồm 3 chữ số (Đỏ, Xanh, Vàng)." },
-            { id: 3, title: "Màn 3: Công tắc ẩn", hint: "Có 3 gạt tay trên tường. Hãy gạt đúng thứ tự: Trái -> Phải -> Giữa." },
-            { id: 4, title: "Màn 4: Trọng lực vật lý", hint: "Thả đủ 3 khối hộp nặng lên đĩa cân vật lý để kích hoạt mở cửa." },
-            { id: 5, title: "Màn 5: Căn phòng tối", hint: "Tìm ngọn đuốc trên kệ để thắp sáng phòng và nhìn rõ chìa khóa." },
-            { id: 6, title: "Màn 6: Xoay đĩa cổ đại", hint: "Xoay khối đá trung tâm sao cho mặt có ký hiệu hướng về phía cửa." },
-            { id: 7, title: "Màn 7: Phương trình màu sắc", hint: "Giải mã: Đỏ(1) + Xanh(2) + Vàng(3). Nhập tổng kết quả vào ổ khóa." },
-            { id: 8, title: "Màn 8: Đòn đẩy vật lý", hint: "Đẩy khối đá nặng va vào nút bấm trên tường để kích hoạt cửa." },
-            { id: 9, title: "Màn 9: Mật mã chuỗi chạm", hint: "Chạm vào 4 trụ đá theo đúng thứ tự độ cao: Thấp nhất -> Cao nhất." },
-            { id: 10, title: "Màn 10: Thử thách cuối cùng", hint: "Giải bài toán logic tổng hợp: Nhặt chìa khóa, gạt cần và nhập mã '9999'." }
+        // Game state
+        let currentLevel = 1;
+        let hasKey = false;
+        let doorMesh = null;
+        let doorOpen = false;
+        
+        let keypadTarget = "";
+        let keypadInput = "";
+        let leverSequence = [];
+        let pillarSequence = 1;
+
+        // Level Config
+        const levels = [
+            { id: 1, hint: "Nhặt chìa khóa trên bàn (Click trái) và chạm cửa để mở." },
+            { id: 2, hint: "Đẩy khối hộp vật lý màu xanh đè lên công tắc đỏ trên sàn." },
+            { id: 3, hint: "Nhìn mã số trên tường và nhập vào bảng điều khiển (Bên phải)." },
+            { id: 4, hint: "Nhảy qua bục vật lý (Space) để lấy chìa khóa." },
+            { id: 5, hint: "Kéo 3 cần gạt theo thứ tự: Trái, Phải, Giữa." },
+            { id: 6, hint: "Phòng tối. Tìm đuốc phát sáng để thấy đường và chìa khóa." },
+            { id: 7, hint: "Xếp khối hộp đè lên nhau để leo lên bục lấy chìa khóa." },
+            { id: 8, hint: "Chạm 4 cột đá theo thứ tự từ Thấp đến Cao." },
+            { id: 9, hint: "Giải toán: Xanh (2) + Đỏ (5) + Vàng (1) = ? Nhập mã." },
+            { id: 10, hint: "Màn cuối: Đẩy hộp vào nút, gạt cần, nhập mã 2026." }
         ];
 
-        let keypadTargetCode = "";
-        let keypadInputBuffer = "";
-        let leverOrderTracker = [];
+        init();
+        animate();
 
         function init() {
+            // Three.js Scene
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1e1e24);
-            scene.fog = new THREE.FogExp2(0x1e1e24, 0.05);
+            scene.background = new THREE.Color(0x111111);
+            scene.fog = new THREE.Fog(0x111111, 0, 20);
 
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 3, 7);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+            // Lighting
+            const ambient = new THREE.AmbientLight(0x404040, 1.5);
+            scene.add(ambient);
+            const light = new THREE.PointLight(0xffffff, 1, 30);
+            light.position.set(0, 5, 0);
+            light.castShadow = true;
+            scene.add(light);
+
+            // Cannon.js Physics World
+            world = new CANNON.World();
+            world.gravity.set(0, -20, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            // Player Physics Body (Sphere)
+            const physicsMaterial = new CANNON.Material("playerMaterial");
+            const playerShape = new CANNON.Sphere(1.5);
+            playerBody = new CANNON.Body({ mass: 5, material: physicsMaterial });
+            playerBody.addShape(playerShape);
+            playerBody.position.set(0, 5, 5);
+            playerBody.linearDamping = 0.9;
+            world.addBody(playerBody);
+
+            // Floor Physics
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+            world.addBody(groundBody);
+
+            // Floor Mesh
+            const floorGeo = new THREE.PlaneGeometry(50, 50);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+            const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.receiveShadow = true;
+            scene.add(floorMesh);
+
+            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            document.body.appendChild(renderer.domElement);
 
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.maxPolarAngle = Math.PI / 2 - 0.05;
+            // Controls
+            controls = new THREE.PointerLockControls(camera, document.body);
+            const blocker = document.getElementById('blocker');
+            const instructions = document.getElementById('instructions');
 
-            world = new CANNON.World();
-            world.gravity.set(0, -9.82, 0);
+            instructions.addEventListener('click', function () {
+                controls.lock();
+            });
+            controls.addEventListener('lock', function () {
+                blocker.style.display = 'none';
+                document.getElementById('keypad-modal').style.display = 'none';
+            });
+            controls.addEventListener('unlock', function () {
+                blocker.style.display = 'flex';
+            });
+            scene.add(controls.getObject());
 
-            setupLighting();
-            loadLevel(currentLevel);
+            // Keyboard Listeners
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseClick); // Tương tác bằng chuột trái
 
             window.addEventListener('resize', onWindowResize);
-            window.addEventListener('pointerdown', onPointerDown);
 
-            animate();
+            // Load First Level
+            loadLevel(currentLevel);
         }
 
-        function setupLighting() {
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-            scene.add(ambientLight);
-
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(5, 10, 5);
-            dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 1024;
-            dirLight.shadow.mapSize.height = 1024;
-            scene.add(dirLight);
-        }
-
-        function createRoom() {
-            const floorGeo = new THREE.PlaneGeometry(10, 10);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x353b48, roughness: 0.8 });
-            const floor = new THREE.Mesh(floorGeo, floorMat);
-            floor.rotation.x = -Math.PI / 2;
-            floor.receiveShadow = true;
-            scene.add(floor);
-
-            const floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
-            floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-            world.addBody(floorBody);
-
-            const wallMat = new THREE.MeshStandardMaterial({ color: 0x2f3640 });
-            const backWall = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 0.2), wallMat);
-            backWall.position.set(0, 3, -5);
-            backWall.receiveShadow = true;
-            scene.add(backWall);
-
-            const doorGeo = new THREE.BoxGeometry(1.6, 3, 0.1);
-            const doorMat = new THREE.MeshStandardMaterial({ color: 0x8c7ae6, metalness: 0.5 });
-            doorMesh = new THREE.Mesh(doorGeo, doorMat);
-            doorMesh.position.set(0, 1.5, -4.9);
-            doorMesh.castShadow = true;
-            doorMesh.name = "exitDoor";
-            scene.add(doorMesh);
-        }
-
-        function clearLevel() {
-            levelObjects.forEach(obj => scene.remove(obj));
-            physicsBodies.forEach(body => world.remove(body));
-            levelObjects = [];
-            physicsBodies = [];
-            isDoorOpen = false;
-            leverOrderTracker = [];
-            if (doorMesh) doorMesh.position.set(0, 1.5, -4.9);
-        }
-
-        function loadLevel(lvl) {
-            clearLevel();
-            createRoom();
-
-            const data = levelsData[lvl - 1];
-            document.getElementById('level-title').innerText = data.title;
-            document.getElementById('level-hint').innerText = "Gợi ý: " + data.hint;
-
-            switch (lvl) {
-                case 1:
-                    createTableWithKey(0, 0, 1);
+        // --- HỆ THỐNG VẬT LÝ VÀ DI CHUYỂN ---
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': case 'ArrowUp': moveForward = true; break;
+                case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = true; break;
+                case 'KeyD': case 'ArrowRight': moveRight = true; break;
+                case 'Space': 
+                    if (canJump) { playerBody.velocity.y = 12; canJump = false; }
                     break;
-                case 2:
-                    createBox(1.5, 0.5, 0, 0xe74c3c);
-                    createBox(-1.5, 0.5, 1, 0x3498db);
-                    createBox(-1.5, 1.2, 1, 0x3498db);
-                    createBox(0, 0.5, 2, 0xf1c40f);
-                    createBox(0.6, 0.5, 2, 0xf1c40f);
-                    createBox(0.3, 1.2, 2, 0xf1c40f);
-                    keypadTargetCode = "123";
-                    createKeypadConsole();
-                    break;
-                case 3:
-                    createLever(-2, 2, -4.8, "lever1");
-                    createLever(0, 2, -4.8, "lever2");
-                    createLever(2, 2, -4.8, "lever3");
-                    break;
-                case 4:
-                    createScalePlatform(0, 0.1, -2);
-                    createPhysicsCube(-1.5, 1, 0);
-                    createPhysicsCube(-1.8, 1, 1);
-                    createPhysicsCube(1.5, 1, 0);
-                    break;
-                case 5:
-                    scene.background = new THREE.Color(0x050508);
-                    scene.fog.color = new THREE.Color(0x050508);
-                    createTorchItem(2, 1, -2);
-                    createHiddenKeyInDark(-2, 0.2, -3);
-                    break;
-                case 6:
-                    createRotatableRune(0, 1.5, -2);
-                    break;
-                case 7:
-                    keypadTargetCode = "6";
-                    createKeypadConsole();
-                    break;
-                case 8:
-                    createPhysicsHeavyBoulder(2, 1, 0);
-                    createWallButton(-2, 1.5, -4.8);
-                    break;
-                case 9:
-                    createPillar(-2.2, 1.0, -3, 1);
-                    createPillar(-0.7, 1.5, -3, 2);
-                    createPillar(0.7, 2.0, -3, 3);
-                    createPillar(2.2, 2.5, -3, 4);
-                    break;
-                case 10:
-                    keypadTargetCode = "9999";
-                    createKeypadConsole();
-                    createTableWithKey(-2, 0, 0);
-                    createLever(2, 2, -4.8, "masterLever");
-                    break;
+                case 'KeyE': onMouseClick(); break; // Hỗ trợ nút E
             }
         }
 
-        function createTableWithKey(x, y, z) {
-            const table = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1.2), new THREE.MeshStandardMaterial({ color: 0x78e08f }));
-            table.position.set(x, y + 0.5, z);
-            scene.add(table);
-            levelObjects.push(table);
-
-            const key = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.04, 8, 16), new THREE.MeshStandardMaterial({ color: 0xf6b93b, metalness: 0.8 }));
-            key.position.set(x, y + 1.1, z);
-            key.name = "keyItem";
-            scene.add(key);
-            levelObjects.push(key);
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': case 'ArrowUp': moveForward = false; break;
+                case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = false; break;
+                case 'KeyD': case 'ArrowRight': moveRight = false; break;
+            }
         }
 
-        function createBox(x, y, z, color) {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshStandardMaterial({ color: color }));
-            mesh.position.set(x, y, z);
-            mesh.castShadow = true;
-            scene.add(mesh);
-            levelObjects.push(mesh);
-        }
+        playerBody.addEventListener("collide", function(e){
+            const contact = e.contact;
+            if(contact.ni.y > 0.5) canJump = true; // Chạm đất mới được nhảy
+        });
 
-        function createKeypadConsole() {
-            const consoleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1, 0.2), new THREE.MeshStandardMaterial({ color: 0x2f3542 }));
-            consoleMesh.position.set(1.5, 1.5, -4.8);
-            consoleMesh.name = "keypadConsole";
-            scene.add(consoleMesh);
-            levelObjects.push(consoleMesh);
-        }
+        // --- HỆ THỐNG TƯƠNG TÁC (RAYCASTER) ---
+        function onMouseClick() {
+            if (!controls.isLocked) return;
 
-        function createLever(x, y, z, name) {
-            const base = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.2), new THREE.MeshStandardMaterial({ color: 0x57606f }));
-            base.position.set(x, y, z);
-            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), new THREE.MeshStandardMaterial({ color: 0xe84118 }));
-            handle.position.set(x, y, z + 0.1);
-            handle.rotation.x = Math.PI / 4;
-            handle.name = name;
-            scene.add(base, handle);
-            levelObjects.push(base, handle);
-        }
-
-        function createPhysicsCube(x, y, z) {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: 0x00a8ff }));
-            mesh.castShadow = true;
-            scene.add(mesh);
-            levelObjects.push(mesh);
-
-            const body = new CANNON.Body({ mass: 2, shape: new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)) });
-            body.position.set(x, y, z);
-            world.addBody(body);
-            physicsBodies.push({ mesh: mesh, body: body });
-            mesh.userData = { body: body };
-        }
-
-        function createScalePlatform(x, y, z) {
-            const platform = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.1, 32), new THREE.MeshStandardMaterial({ color: 0x44bd32 }));
-            platform.position.set(x, y, z);
-            scene.add(platform);
-            levelObjects.push(platform);
-        }
-
-        function createTorchItem(x, y, z) {
-            const torch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.6), new THREE.MeshStandardMaterial({ color: 0xe1b12c }));
-            torch.position.set(x, y, z);
-            torch.name = "torchItem";
-            scene.add(torch);
-            levelObjects.push(torch);
-        }
-
-        function createHiddenKeyInDark(x, y, z) {
-            const key = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 8, 16), new THREE.MeshStandardMaterial({ color: 0xf5cd79 }));
-            key.position.set(x, y, z);
-            key.name = "keyItem";
-            scene.add(key);
-            levelObjects.push(key);
-        }
-
-        function createRotatableRune(x, y, z) {
-            const rune = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({ color: 0x9c88ff }));
-            rune.position.set(x, y, z);
-            rune.name = "rotatableRune";
-            scene.add(rune);
-            levelObjects.push(rune);
-        }
-
-        function createPhysicsHeavyBoulder(x, y, z) {
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0x7f8c8d }));
-            mesh.castShadow = true;
-            scene.add(mesh);
-            levelObjects.push(mesh);
-
-            const body = new CANNON.Body({ mass: 5, shape: new CANNON.Sphere(0.5) });
-            body.position.set(x, y, z);
-            world.addBody(body);
-            physicsBodies.push({ mesh: mesh, body: body });
-        }
-
-        function createWallButton(x, y, z) {
-            const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2), new THREE.MeshStandardMaterial({ color: 0xc0392b }));
-            btn.position.set(x, y, z);
-            btn.rotation.x = Math.PI / 2;
-            scene.add(btn);
-            levelObjects.push(btn);
-        }
-
-        function createPillar(x, y, z, order) {
-            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, y * 2), new THREE.MeshStandardMaterial({ color: 0x00d2d3 }));
-            pillar.position.set(x, y, z);
-            pillar.name = "pillar_" + order;
-            scene.add(pillar);
-            levelObjects.push(pillar);
-        }
-
-        function onPointerDown(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children);
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(interactiveObjects, false);
 
             if (intersects.length > 0) {
-                const clickedObj = intersects[0].object;
-
-                if (clickedObj.name === "keyItem") {
-                    inventory.hasKey = true;
-                    scene.remove(clickedObj);
-                    showToast("Đã nhặt được Chìa Khóa!");
+                const object = intersects[0].object;
+                const dist = intersects[0].distance;
+                if (dist > 4) {
+                    showToast("Quá xa để tương tác!");
+                    return;
                 }
 
-                if (clickedObj.name === "exitDoor") {
-                    if (currentLevel === 1 || currentLevel === 5 || currentLevel === 10) {
-                        if (inventory.hasKey) {
-                            openDoorAndNextLevel();
-                        } else {
-                            showToast("Cửa đã khóa! Cần tìm chìa khóa.");
-                        }
-                    } else if (isDoorOpen) {
-                        nextLevel();
-                    } else {
-                        showToast("Cửa đang đóng chặt!");
-                    }
-                }
-
-                if (clickedObj.name === "keypadConsole") {
-                    document.getElementById('keypad-modal').style.display = 'flex';
-                }
-
-                if (clickedObj.name.startsWith("lever")) {
-                    clickedObj.rotation.x *= -1;
-                    leverOrderTracker.push(clickedObj.name);
-                    checkLeverSequence();
-                }
-
-                if (clickedObj.name.startsWith("pillar_")) {
-                    const pillarId = parseInt(clickedObj.name.split("_")[1]);
-                    handlePillarSequence(pillarId);
-                }
-
-                if (clickedObj.name === "rotatableRune") {
-                    clickedObj.rotation.y += Math.PI / 2;
-                    if (Math.abs(clickedObj.rotation.y % (Math.PI * 2)) < 0.1) {
-                        showToast("Cổ vật đã xoay đúng hướng!");
-                        openDoorAndNextLevel();
-                    }
-                }
-
-                if (clickedObj.name === "torchItem") {
-                    scene.background = new THREE.Color(0x1e1e24);
-                    scene.fog.color = new THREE.Color(0x1e1e24);
-                    const pointLight = new THREE.PointLight(0xffa500, 2, 10);
-                    camera.add(pointLight);
-                    scene.add(camera);
-                    scene.remove(clickedObj);
-                    showToast("Đã thắp sáng căn phòng!");
-                }
-
-                if (clickedObj.userData && clickedObj.userData.body) {
-                    const body = clickedObj.userData.body;
-                    body.applyImpulse(new CANNON.Vec3(0, 2, -5), body.position);
-                }
+                handleInteraction(object);
             }
         }
 
-        function checkLeverSequence() {
-            const correctOrder = ["lever1", "lever3", "lever2"];
-            if (leverOrderTracker.length === 3) {
-                if (JSON.stringify(leverOrderTracker) === JSON.stringify(correctOrder)) {
-                    showToast("Mật mã cần gạt chính xác!");
-                    openDoorAndNextLevel();
+        function handleInteraction(obj) {
+            const name = obj.name;
+            
+            if (name === "key") {
+                hasKey = true;
+                updateHUD();
+                scene.remove(obj);
+                showToast("Đã lấy được Chìa Khóa!");
+            }
+            else if (name === "door") {
+                if (doorOpen) return;
+                // Kiểm tra điều kiện qua màn
+                let canOpen = false;
+                if ([1, 4, 6, 7].includes(currentLevel) && hasKey) canOpen = true;
+                if (currentLevel === 2 || currentLevel === 8 || currentLevel === 10) canOpen = hasKey; // Màn 2,8 kiểm tra bằng logic trigger
+                if (canOpen) openDoor();
+                else showToast("Cửa khóa! Yêu cầu hoàn thành giải đố hoặc tìm chìa khóa.");
+            }
+            else if (name === "keypad") {
+                document.exitPointerLock();
+                document.getElementById('keypad-modal').style.display = 'block';
+                keypadInput = "";
+                document.getElementById('keypad-display').innerText = "----";
+            }
+            else if (name.startsWith("lever_")) {
+                obj.rotation.x = Math.PI / 4; // Hoạt ảnh gạt
+                leverSequence.push(name);
+                checkLeverLogic();
+            }
+            else if (name === "torch") {
+                scene.fog.near = 10; scene.fog.far = 50; // Sáng lên
+                scene.add(new THREE.AmbientLight(0x404040, 2));
+                scene.remove(obj);
+                showToast("Cầm đuốc! Phòng đã sáng.");
+            }
+            else if (name.startsWith("pillar_")) {
+                let id = parseInt(name.split("_")[1]);
+                if (id === pillarSequence) {
+                    pillarSequence++;
+                    obj.material.color.setHex(0x00ff00);
+                    showToast(`Cột ${id} đã sáng!`);
+                    if (pillarSequence > 4) { hasKey = true; showToast("Cửa đã mở khóa!"); }
                 } else {
-                    showToast("Sai thứ tự! Đã đặt lại.");
-                    leverOrderTracker = [];
+                    showToast("Sai thứ tự! Chọn lại từ cột thấp nhất.");
+                    pillarSequence = 1; // Reset
                 }
             }
         }
 
-        let pillarStep = 1;
-        function handlePillarSequence(id) {
-            if (id === pillarStep) {
-                pillarStep++;
-                showToast(`Đúng trụ thứ ${id}!`);
-                if (pillarStep > 4) {
-                    showToast("Đã mở khóa các trụ!");
-                    openDoorAndNextLevel();
-                }
-            } else {
-                showToast("Sai thứ tự! Chọn lại từ trụ thấp nhất.");
-                pillarStep = 1;
-            }
-        }
-
-        function pressKey(num) {
-            if (keypadInputBuffer.length < 4) {
-                keypadInputBuffer += num;
-                document.getElementById('keypad-input').innerText = keypadInputBuffer;
-            }
-        }
-
-        function clearKeypad() {
-            keypadInputBuffer = "";
-            document.getElementById('keypad-input').innerText = "----";
-        }
-
-        function submitKeypad() {
-            if (keypadInputBuffer === keypadTargetCode) {
-                showToast("Mật mã chính xác!");
+        // --- GIAO DIỆN KEYPAD ---
+        window.press = function(val) {
+            if (val === 'C') { keypadInput = ""; }
+            else if (val === 'OK') {
+                if (keypadInput === keypadTarget) {
+                    showToast("Mật mã đúng! Cửa mở.");
+                    hasKey = true; openDoor();
+                } else { showToast("Sai mật mã!"); }
                 document.getElementById('keypad-modal').style.display = 'none';
-                clearKeypad();
-                openDoorAndNextLevel();
-            } else {
-                showToast("Mật mã sai! Hãy thử lại.");
-                clearKeypad();
+                controls.lock();
+            }
+            else { if (keypadInput.length < 4) keypadInput += val; }
+            document.getElementById('keypad-display').innerText = keypadInput === "" ? "----" : keypadInput;
+        }
+
+        function checkLeverLogic() {
+            const answer = ["lever_left", "lever_right", "lever_mid"];
+            if (leverSequence.length === 3) {
+                if (JSON.stringify(leverSequence) === JSON.stringify(answer)) {
+                    hasKey = true; showToast("Chuỗi cần gạt chính xác!");
+                } else {
+                    showToast("Sai trình tự!"); leverSequence = [];
+                }
             }
         }
 
-        function openDoorAndNextLevel() {
-            isDoorOpen = true;
-            showToast("Cửa đang mở! Chuẩn bị sang màn tiếp...");
-            let openProgress = 0;
-            const interval = setInterval(() => {
-                if (doorMesh) {
-                    doorMesh.position.x += 0.05;
-                    openProgress += 0.05;
-                    if (openProgress >= 1.8) {
-                        clearInterval(interval);
-                        setTimeout(() => { nextLevel(); }, 1000);
-                    }
-                }
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.style.display = "block";
+            setTimeout(() => { toast.style.display = "none"; }, 3000);
+        }
+
+        function updateHUD() {
+            document.getElementById("level-text").innerText = "Màn: " + currentLevel;
+            document.getElementById("hint-text").innerText = "Gợi ý: " + levels[currentLevel-1].hint;
+            document.getElementById("inventory-text").innerText = "Túi đồ: " + (hasKey ? "Chìa khóa 🔑" : "Trống");
+        }
+
+        // --- XÂY DỰNG MÀN CHƠI ---
+        function clearLevel() {
+            objectsToUpdate.forEach(o => { world.remove(o.body); scene.remove(o.mesh); });
+            interactiveObjects.forEach(o => scene.remove(o));
+            objectsToUpdate = []; interactiveObjects = [];
+            
+            if (doorMesh) scene.remove(doorMesh);
+            hasKey = false; doorOpen = false;
+            leverSequence = []; pillarSequence = 1;
+            playerBody.position.set(0, 5, 5); playerBody.velocity.set(0,0,0);
+            updateHUD();
+        }
+
+        function buildWalls() {
+            const mat = new THREE.MeshStandardMaterial({color: 0x555555});
+            const back = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 1), mat);
+            back.position.set(0, 5, -10); scene.add(back);
+            
+            const left = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), mat);
+            left.position.set(-10, 5, 0); scene.add(left);
+            
+            const right = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), mat);
+            right.position.set(10, 5, 0); scene.add(right);
+
+            // Door
+            doorMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 6, 0.5), new THREE.MeshStandardMaterial({color: 0x8e44ad}));
+            doorMesh.position.set(0, 3, -9.5);
+            doorMesh.name = "door";
+            scene.add(doorMesh);
+            interactiveObjects.push(doorMesh);
+        }
+
+        function createPhysicsBox(w, h, d, mass, x, y, z, color) {
+            const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2));
+            const body = new CANNON.Body({ mass: mass });
+            body.addShape(shape);
+            body.position.set(x, y, z);
+            world.addBody(body);
+
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({color: color}));
+            scene.add(mesh);
+            objectsToUpdate.push({ mesh, body });
+            return {mesh, body};
+        }
+
+        function createItem(type, x, y, z) {
+            let mesh;
+            if (type === "key") {
+                mesh = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.1, 8, 16), new THREE.MeshStandardMaterial({color: 0xffd700}));
+                mesh.name = "key";
+            } else if (type === "keypad") {
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.2), new THREE.MeshStandardMaterial({color: 0x222222}));
+                mesh.name = "keypad";
+            } else if (type === "lever") {
+                mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), new THREE.MeshStandardMaterial({color: 0xff0000}));
+                mesh.rotation.x = -Math.PI / 4;
+            }
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+            interactiveObjects.push(mesh);
+            return mesh;
+        }
+
+        function openDoor() {
+            doorOpen = true;
+            let p = 0;
+            const iv = setInterval(() => {
+                doorMesh.position.y -= 0.1; p += 0.1;
+                if (p > 6) { clearInterval(iv); nextLevel(); }
             }, 30);
         }
 
         function nextLevel() {
             if (currentLevel < 10) {
                 currentLevel++;
-                inventory = { hasKey: false, hasTorch: false };
                 loadLevel(currentLevel);
             } else {
-                alert("Chúc mừng! Bạn đã xuất sắc vượt qua 10 căn phòng bí mật!");
-                currentLevel = 1;
-                loadLevel(currentLevel);
+                alert("CHÚC MỪNG BẠN ĐÃ THOÁT KHỎI 10 CĂN PHÒNG!");
+                currentLevel = 1; loadLevel(1);
             }
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('message-toast');
-            toast.innerText = msg;
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        function loadLevel(lvl) {
+            clearLevel();
+            buildWalls();
+            scene.fog.near = 0.1; scene.fog.far = 100; // Reset fog
+
+            switch(lvl) {
+                case 1:
+                    createPhysicsBox(2, 2, 2, 0, 0, 1, 0, 0x8B4513); // Bàn
+                    createItem("key", 0, 2.5, 0);
+                    break;
+                case 2:
+                    createPhysicsBox(1.5, 1.5, 1.5, 5, 0, 5, 2, 0x3498db); // Hộp đẩy
+                    // Nút bấm trên sàn (Trigged by update loop)
+                    const pad = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.2), new THREE.MeshStandardMaterial({color: 0xe74c3c}));
+                    pad.position.set(0, 0.1, -4); pad.name="pad"; scene.add(pad); interactiveObjects.push(pad);
+                    break;
+                case 3:
+                    createItem("keypad", 3, 3, -9.8); keypadTarget = "312";
+                    // Wall Text Fake
+                    const txtBox = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 0.1), new THREE.MeshStandardMaterial({color: 0xffffff}));
+                    txtBox.position.set(-3, 4, -9.8); scene.add(txtBox);
+                    break;
+                case 4:
+                    createPhysicsBox(3, 1, 3, 0, 0, 1, 0, 0x27ae60);
+                    createPhysicsBox(3, 1, 3, 0, 0, 3, -5, 0x27ae60);
+                    createItem("key", 0, 4.5, -5);
+                    break;
+                case 5:
+                    const l1 = createItem("lever", -3, 3, -9.8); l1.name="lever_left";
+                    const l2 = createItem("lever", 0, 3, -9.8); l2.name="lever_mid";
+                    const l3 = createItem("lever", 3, 3, -9.8); l3.name="lever_right";
+                    break;
+                case 6:
+                    scene.fog.near = 1; scene.fog.far = 3; // Phòng tối
+                    const torch = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,1), new THREE.MeshBasicMaterial({color:0xffaa00}));
+                    torch.position.set(3, 1, 0); torch.name="torch"; scene.add(torch); interactiveObjects.push(torch);
+                    createItem("key", -4, 1, -4);
+                    break;
+                case 7:
+                    createPhysicsBox(2, 2, 2, 5, -3, 2, 0, 0x9b59b6);
+                    createPhysicsBox(2, 2, 2, 5, 3, 2, 0, 0x9b59b6);
+                    createItem("key", 0, 6, -8); // Trên cao
+                    break;
+                case 8:
+                    const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,2), new THREE.MeshStandardMaterial({color:0x34495e})); p1.position.set(-4,1,-5); p1.name="pillar_1"; scene.add(p1); interactiveObjects.push(p1);
+                    const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,3), new THREE.MeshStandardMaterial({color:0x34495e})); p2.position.set(-1.5,1.5,-5); p2.name="pillar_2"; scene.add(p2); interactiveObjects.push(p2);
+                    const p3 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,4), new THREE.MeshStandardMaterial({color:0x34495e})); p3.position.set(1.5,2,-5); p3.name="pillar_3"; scene.add(p3); interactiveObjects.push(p3);
+                    const p4 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,5), new THREE.MeshStandardMaterial({color:0x34495e})); p4.position.set(4,2.5,-5); p4.name="pillar_4"; scene.add(p4); interactiveObjects.push(p4);
+                    break;
+                case 9:
+                    createItem("keypad", 0, 3, -9.8); keypadTarget = "8";
+                    break;
+                case 10:
+                    createPhysicsBox(1.5, 1.5, 1.5, 5, -5, 5, 2, 0x3498db); // Đẩy
+                    const btn = new THREE.Mesh(new THREE.BoxGeometry(2,0.2,2), new THREE.MeshStandardMaterial({color:0xe74c3c})); btn.position.set(-5, 0.1, -5); scene.add(btn);
+                    createItem("keypad", 3, 3, -9.8); keypadTarget = "2026";
+                    break;
+            }
         }
 
         function onWindowResize() {
@@ -638,44 +482,65 @@ game_html_code = """
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        // --- GAME LOOP ---
         function animate() {
             requestAnimationFrame(animate);
-            world.step(1 / 60);
 
-            physicsBodies.forEach(item => {
-                item.mesh.position.copy(item.body.position);
-                item.mesh.quaternion.copy(item.body.quaternion);
-            });
+            if (controls.isLocked === true) {
+                // Vật lý FPS Movement
+                let dt = (Date.now() - time) / 1000;
+                world.step(1/60, dt, 3);
+                
+                // Cập nhật hướng di chuyển theo góc camera
+                camera.getWorldDirection(direction);
+                direction.y = 0; direction.normalize();
+                
+                const right = new THREE.Vector3();
+                right.crossVectors(camera.up, direction).normalize();
 
-            if (currentLevel === 4 && !isDoorOpen) {
-                let count = 0;
-                physicsBodies.forEach(item => {
-                    if (item.body.position.z < -1.5 && item.body.position.y < 0.5) count++;
+                const speed = 20;
+                let vX = 0, vZ = 0;
+                
+                if (moveForward) { vX += direction.x * speed; vZ += direction.z * speed; }
+                if (moveBackward) { vX -= direction.x * speed; vZ -= direction.z * speed; }
+                if (moveLeft) { vX -= right.x * speed; vZ -= right.z * speed; }
+                if (moveRight) { vX += right.x * speed; vZ += right.z * speed; }
+
+                // Áp dụng lực cho Physics Body
+                playerBody.velocity.x = vX;
+                playerBody.velocity.z = vZ;
+
+                // Sync Camera với Cannon.js Body
+                controls.getObject().position.copy(playerBody.position);
+                controls.getObject().position.y += 1; // Mắt cao hơn tâm cơ thể
+                
+                // Đồng bộ hộp vật lý
+                objectsToUpdate.forEach(obj => {
+                    obj.mesh.position.copy(obj.body.position);
+                    obj.mesh.quaternion.copy(obj.body.quaternion);
                 });
-                if (count >= 3) {
-                    showToast("Đủ trọng lượng! Mở cửa.");
-                    openDoorAndNextLevel();
-                }
-            }
 
-            if (currentLevel === 8 && !isDoorOpen) {
-                physicsBodies.forEach(item => {
-                    if (item.body.position.distanceTo(new CANNON.Vec3(-2, 1.5, -4.8)) < 1.0) {
-                        showToast("Khối đá đã đè vào công tắc!");
-                        openDoorAndNextLevel();
+                // Logic đặc biệt Level 2 & 10 (Công tắc đè bằng hộp)
+                if ((currentLevel === 2 || currentLevel === 10) && !hasKey && objectsToUpdate.length > 0) {
+                    let boxBody = objectsToUpdate[0].body;
+                    let targetX = currentLevel === 2 ? 0 : -5;
+                    if (Math.abs(boxBody.position.x - targetX) < 1.5 && Math.abs(boxBody.position.z - -4) < 1.5) {
+                        hasKey = true; updateHUD(); showToast("Đã kích hoạt nút bấm! Cửa mở.");
                     }
+                }
+                
+                // Quay chìa khóa tự động
+                interactiveObjects.forEach(obj => {
+                    if(obj.name === "key") obj.rotation.y += 0.05;
                 });
             }
 
-            controls.update();
+            time = Date.now();
             renderer.render(scene, camera);
         }
-
-        window.onload = init;
     </script>
 </body>
 </html>
 """
 
-# Nhúng Game HTML/JS vào ứng dụng Streamlit
-components.html(game_html_code, height=800, scrolling=False)
+components.html(html_code, height=800, scrolling=False)
