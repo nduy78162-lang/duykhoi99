@@ -2,12 +2,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(
-    page_title="3D Escape Room - Bàn Phím",
-    page_icon="🎮",
+    page_title="3D Escape Room - Game Trí Tuệ",
+    page_icon="🚪",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
+# Ẩn các thành phần thừa của Streamlit
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -24,44 +25,186 @@ html_code = """
     <meta charset="UTF-8">
     <title>3D Escape Room</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #blocker {
-            position: absolute; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);
-            display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; z-index: 10;
-        }
-        #instructions { font-size: 24px; text-align: center; cursor: pointer; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 2px solid #fff; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 5; }
-        #hud { position: absolute; top: 20px; left: 20px; color: #00ff00; font-size: 18px; pointer-events: none; z-index: 5; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; }
-        #toast { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: yellow; padding: 10px 20px; font-size: 18px; border-radius: 10px; display: none; z-index: 5; }
+        body { margin: 0; overflow: hidden; background-color: #0d0d11; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
         
-        /* Keypad UI */
-        #keypad-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; padding: 20px; border-radius: 10px; border: 2px solid #0f0; display: none; z-index: 20; text-align: center; pointer-events: auto; }
-        #keypad-display { background: #000; color: #0f0; font-size: 30px; margin-bottom: 15px; padding: 10px; letter-spacing: 5px; border-radius: 5px; }
+        /* ---------------- GIAO DIỆN BẮT ĐẦU (MAIN MENU) ---------------- */
+        #main-menu {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, rgba(26,26,41,0.85) 0%, rgba(10,10,15,0.98) 100%);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; backdrop-filter: blur(8px); transition: opacity 0.5s ease;
+        }
+        
+        .game-title {
+            font-size: 56px; font-weight: 900; color: #4cd137;
+            text-transform: uppercase; letter-spacing: 6px;
+            text-shadow: 0 0 20px rgba(76, 209, 55, 0.6), 0 0 40px rgba(76, 209, 55, 0.2);
+            margin-bottom: 10px; animation: pulse 2s infinite alternate;
+        }
+        
+        .game-subtitle {
+            font-size: 18px; color: #a4b0be; margin-bottom: 40px; letter-spacing: 2px;
+        }
+
+        .menu-btn-container {
+            display: flex; flex-direction: column; gap: 18px; width: 280px;
+        }
+
+        .menu-btn {
+            padding: 15px 25px; font-size: 18px; font-weight: bold;
+            color: #ffffff; background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #4cd137; border-radius: 8px; cursor: pointer;
+            transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(76, 209, 55, 0.1);
+        }
+
+        .menu-btn:hover {
+            background: #4cd137; color: #000000;
+            box-shadow: 0 0 25px rgba(76, 209, 55, 0.8); transform: translateY(-2px);
+        }
+
+        /* ---------------- POPUP MODALS (HƯỚNG DẪN / CHỌN MÀN) ---------------- */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.85); display: none; justify-content: center;
+            align-items: center; z-index: 101; backdrop-filter: blur(5px);
+        }
+
+        .modal-card {
+            background: #1e1e2e; border: 2px solid #4cd137; border-radius: 12px;
+            padding: 30px; width: 500px; max-width: 90%; color: #fff;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8); text-align: center;
+        }
+
+        .modal-card h2 { color: #4cd137; margin-top: 0; font-size: 28px; }
+
+        .level-grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 20px 0;
+        }
+
+        .level-btn {
+            padding: 15px 0; font-size: 18px; font-weight: bold;
+            background: #2f3542; color: #fff; border: 1px solid #747d8c;
+            border-radius: 6px; cursor: pointer; transition: 0.2s;
+        }
+
+        .level-btn:hover { background: #4cd137; color: #000; border-color: #4cd137; }
+
+        .close-btn {
+            background: #e84118; color: white; border: none; padding: 10px 20px;
+            border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 15px;
+        }
+
+        /* ---------------- GAME IN-PLAY UI ---------------- */
+        #blocker {
+            position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.7);
+            display: none; flex-direction: column; justify-content: center;
+            align-items: center; color: white; z-index: 50;
+        }
+        #instructions-click {
+            font-size: 22px; text-align: center; cursor: pointer; padding: 25px 40px;
+            background: rgba(255,255,255,0.05); border-radius: 10px; border: 2px solid #4cd137;
+            box-shadow: 0 0 20px rgba(76, 209, 55, 0.3);
+        }
+
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: #fff; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; }
+        
+        #hud {
+            position: absolute; top: 20px; left: 20px; color: #4cd137; font-size: 16px;
+            pointer-events: none; z-index: 10; background: rgba(0,0,0,0.65);
+            padding: 15px; border-radius: 8px; border: 1px solid rgba(76, 209, 55, 0.3);
+        }
+
+        .menu-hud-btn {
+            pointer-events: auto; margin-top: 10px; background: rgba(255,255,255,0.1);
+            color: #fff; border: 1px solid #aaa; padding: 5px 10px; border-radius: 4px; cursor: pointer;
+        }
+        .menu-hud-btn:hover { background: #e84118; border-color: #e84118; }
+
+        #toast { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fbc531; padding: 10px 25px; font-size: 18px; border-radius: 20px; border: 1px solid #fbc531; display: none; z-index: 10; }
+
+        /* Keypad UI Modal */
+        #keypad-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a1a; padding: 20px; border-radius: 10px; border: 2px solid #4cd137; display: none; z-index: 80; text-align: center; }
+        #keypad-display { background: #000; color: #4cd137; font-size: 30px; margin-bottom: 15px; padding: 10px; letter-spacing: 5px; border-radius: 5px; font-family: monospace; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .btn { padding: 15px; font-size: 20px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        .btn:hover { background: #666; }
+        .btn { padding: 15px; font-size: 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .btn:hover { background: #555; }
         .btn-ok { background: #27ae60; } .btn-clear { background: #c0392b; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); text-shadow: 0 0 20px rgba(76, 209, 55, 0.6); }
+            100% { transform: scale(1.03); text-shadow: 0 0 35px rgba(76, 209, 55, 0.9); }
+        }
     </style>
 </head>
 <body>
+
+    <!-- 1. GIAO DIỆN BẮT ĐẦU (MAIN MENU) -->
+    <div id="main-menu">
+        <div class="game-title">ESCAPE ROOM 3D</div>
+        <div class="game-subtitle">THÁCH THỨC TRÍ TUỆ & KHẢ NĂNG THOÁT HẠI</div>
+        <div class="menu-btn-container">
+            <button class="menu-btn" onclick="startNewGame()">▶ Bắt đầu chơi</button>
+            <button class="menu-btn" onclick="openModal('level-modal')">🚪 Chọn màn chơi</button>
+            <button class="menu-btn" onclick="openModal('guide-modal')">📖 Hướng dẫn</button>
+        </div>
+    </div>
+
+    <!-- 2. POPUP CHỌN MÀN CHƠI -->
+    <div id="level-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h2>CHỌN MÀN CHƠI (1 - 10)</h2>
+            <div class="level-grid">
+                <button class="level-btn" onclick="selectLevel(1)">1</button>
+                <button class="level-btn" onclick="selectLevel(2)">2</button>
+                <button class="level-btn" onclick="selectLevel(3)">3</button>
+                <button class="level-btn" onclick="selectLevel(4)">4</button>
+                <button class="level-btn" onclick="selectLevel(5)">5</button>
+                <button class="level-btn" onclick="selectLevel(6)">6</button>
+                <button class="level-btn" onclick="selectLevel(7)">7</button>
+                <button class="level-btn" onclick="selectLevel(8)">8</button>
+                <button class="level-btn" onclick="selectLevel(9)">9</button>
+                <button class="level-btn" onclick="selectLevel(10)">10</button>
+            </div>
+            <button class="close-btn" onclick="closeModal('level-modal')">Đóng</button>
+        </div>
+    </div>
+
+    <!-- 3. POPUP HƯỚNG DẪN CHƠI -->
+    <div id="guide-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h2>HƯỚNG DẪN ĐIỀU KHIỂN</h2>
+            <div style="text-align: left; line-height: 1.8; margin: 20px 0; font-size: 16px;">
+                • <b>W, A, S, D</b>: Di chuyển nhân vật<br/>
+                • <b>Di chuyển chuột</b>: Xoay góc nhìn 360°<br/>
+                • <b>Phím Space</b>: Nhảy lên bục<br/>
+                • <b>Click Chuột Trái (hoặc phím E)</b>: Tương tác / Nhặt đồ / Mở cửa / Gạt cần<br/>
+                • <b>Đẩy vật thể</b>: Đi thẳng vào hộp/khối đá vật lý để đẩy
+            </div>
+            <button class="close-btn" onclick="closeModal('guide-modal')">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- 4. KHU VỰC GAME & HUD -->
     <div id="blocker">
-        <div id="instructions">
-            <b>CLICK VÀO ĐÂY ĐỂ CHƠI</b><br/><br/>
-            WASD: Di chuyển<br/>
-            Chuột: Xoay góc nhìn<br/>
-            Space: Nhảy<br/>
-            Click Chuột Trái (hoặc phím E): Tương tác vật thể
+        <div id="instructions-click">
+            <b>SẴN SÀNG CHƠI</b><br/><br/>
+            Click chuột vào đây để điều khiển góc nhìn!
         </div>
     </div>
     
     <div id="crosshair"></div>
+    
     <div id="hud">
         <div id="level-text">Màn: 1</div>
-        <div id="hint-text">Gợi ý: Tìm chìa khóa trên bàn.</div>
+        <div id="hint-text" style="max-width: 300px; margin: 5px 0;">Gợi ý: Tìm chìa khóa trên bàn.</div>
         <div id="inventory-text">Túi đồ: Trống</div>
+        <button class="menu-hud-btn" onclick="returnToMainMenu()">☰ Menu Chính</button>
     </div>
+    
     <div id="toast"></div>
 
+    <!-- Keypad Modal -->
     <div id="keypad-modal">
         <div id="keypad-display">----</div>
         <div class="grid">
@@ -72,7 +215,7 @@ html_code = """
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Library Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
@@ -85,12 +228,7 @@ html_code = """
         let objectsToUpdate = [];
         let interactiveObjects = [];
         
-        // Input state
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
-        let velocity = new THREE.Vector3();
-        let direction = new THREE.Vector3();
-
-        // Game state
         let currentLevel = 1;
         let hasKey = false;
         let doorMesh = null;
@@ -101,17 +239,16 @@ html_code = """
         let leverSequence = [];
         let pillarSequence = 1;
 
-        // Level Config
         const levels = [
             { id: 1, hint: "Nhặt chìa khóa trên bàn (Click trái) và chạm cửa để mở." },
-            { id: 2, hint: "Đẩy khối hộp vật lý màu xanh đè lên công tắc đỏ trên sàn." },
+            { id: 2, hint: "Đẩy khối hộp vật lý màu xanh đè lên công tắc màu đỏ trên sàn." },
             { id: 3, hint: "Nhìn mã số trên tường và nhập vào bảng điều khiển (Bên phải)." },
             { id: 4, hint: "Nhảy qua bục vật lý (Space) để lấy chìa khóa." },
             { id: 5, hint: "Kéo 3 cần gạt theo thứ tự: Trái, Phải, Giữa." },
             { id: 6, hint: "Phòng tối. Tìm đuốc phát sáng để thấy đường và chìa khóa." },
             { id: 7, hint: "Xếp khối hộp đè lên nhau để leo lên bục lấy chìa khóa." },
             { id: 8, hint: "Chạm 4 cột đá theo thứ tự từ Thấp đến Cao." },
-            { id: 9, hint: "Giải toán: Xanh (2) + Đỏ (5) + Vàng (1) = ? Nhập mã." },
+            { id: 9, hint: "Giải toán đố: Xanh (2) + Đỏ (5) + Vàng (1) = ? Nhập mã." },
             { id: 10, hint: "Màn cuối: Đẩy hộp vào nút, gạt cần, nhập mã 2026." }
         ];
 
@@ -119,194 +256,168 @@ html_code = """
         animate();
 
         function init() {
-            // Three.js Scene
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x111111);
-            scene.fog = new THREE.Fog(0x111111, 0, 20);
+            scene.background = new THREE.Color(0x0d0d11);
+            scene.fog = new THREE.Fog(0x0d0d11, 0, 25);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-            // Lighting
-            const ambient = new THREE.AmbientLight(0x404040, 1.5);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambient);
             const light = new THREE.PointLight(0xffffff, 1, 30);
-            light.position.set(0, 5, 0);
-            light.castShadow = true;
+            light.position.set(0, 6, 0);
             scene.add(light);
 
-            // Cannon.js Physics World
+            // Physics World
             world = new CANNON.World();
             world.gravity.set(0, -20, 0);
             world.broadphase = new CANNON.NaiveBroadphase();
-            world.solver.iterations = 10;
 
-            // Player Physics Body (Sphere)
-            const physicsMaterial = new CANNON.Material("playerMaterial");
+            // Player Physics
             const playerShape = new CANNON.Sphere(1.5);
-            playerBody = new CANNON.Body({ mass: 5, material: physicsMaterial });
+            playerBody = new CANNON.Body({ mass: 5 });
             playerBody.addShape(playerShape);
             playerBody.position.set(0, 5, 5);
             playerBody.linearDamping = 0.9;
             world.addBody(playerBody);
 
             // Floor Physics
-            const groundShape = new CANNON.Plane();
-            const groundBody = new CANNON.Body({ mass: 0 });
-            groundBody.addShape(groundShape);
+            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
             groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
             world.addBody(groundBody);
 
             // Floor Mesh
-            const floorGeo = new THREE.PlaneGeometry(50, 50);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
-            const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x22222a }));
             floorMesh.rotation.x = -Math.PI / 2;
-            floorMesh.receiveShadow = true;
             scene.add(floorMesh);
 
-            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
             // Controls
             controls = new THREE.PointerLockControls(camera, document.body);
             const blocker = document.getElementById('blocker');
-            const instructions = document.getElementById('instructions');
+            const instructions = document.getElementById('instructions-click');
 
-            instructions.addEventListener('click', function () {
-                controls.lock();
-            });
-            controls.addEventListener('lock', function () {
-                blocker.style.display = 'none';
-                document.getElementById('keypad-modal').style.display = 'none';
-            });
+            instructions.addEventListener('click', function () { controls.lock(); });
+            controls.addEventListener('lock', function () { blocker.style.display = 'none'; });
             controls.addEventListener('unlock', function () {
-                blocker.style.display = 'flex';
+                if(document.getElementById('main-menu').style.display === 'none' &&
+                   document.getElementById('keypad-modal').style.display === 'none') {
+                    blocker.style.display = 'flex';
+                }
             });
             scene.add(controls.getObject());
 
-            // Keyboard Listeners
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('mousedown', onMouseClick); // Tương tác bằng chuột trái
-
+            document.addEventListener('mousedown', onMouseClick);
             window.addEventListener('resize', onWindowResize);
 
-            // Load First Level
             loadLevel(currentLevel);
         }
 
-        // --- HỆ THỐNG VẬT LÝ VÀ DI CHUYỂN ---
+        /* ---------------- QUẢN LÝ GIAO DIỆN MENU ---------------- */
+        function startNewGame() {
+            document.getElementById('main-menu').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('main-menu').style.display = 'none';
+                document.getElementById('blocker').style.display = 'flex';
+            }, 500);
+        }
+
+        function returnToMainMenu() {
+            controls.unlock();
+            document.getElementById('blocker').style.display = 'none';
+            document.getElementById('main-menu').style.display = 'flex';
+            document.getElementById('main-menu').style.opacity = '1';
+        }
+
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function selectLevel(lvl) {
+            currentLevel = lvl;
+            loadLevel(currentLevel);
+            closeModal('level-modal');
+            startNewGame();
+        }
+
+        /* ---------------- GAMEPLAY CONTROLS ---------------- */
         function onKeyDown(event) {
             switch (event.code) {
-                case 'KeyW': case 'ArrowUp': moveForward = true; break;
-                case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
-                case 'KeyS': case 'ArrowDown': moveBackward = true; break;
-                case 'KeyD': case 'ArrowRight': moveRight = true; break;
-                case 'Space': 
-                    if (canJump) { playerBody.velocity.y = 12; canJump = false; }
-                    break;
-                case 'KeyE': onMouseClick(); break; // Hỗ trợ nút E
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': if (canJump) { playerBody.velocity.y = 12; canJump = false; } break;
+                case 'KeyE': onMouseClick(); break;
             }
         }
 
         function onKeyUp(event) {
             switch (event.code) {
-                case 'KeyW': case 'ArrowUp': moveForward = false; break;
-                case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
-                case 'KeyS': case 'ArrowDown': moveBackward = false; break;
-                case 'KeyD': case 'ArrowRight': moveRight = false; break;
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
             }
         }
 
         playerBody.addEventListener("collide", function(e){
-            const contact = e.contact;
-            if(contact.ni.y > 0.5) canJump = true; // Chạm đất mới được nhảy
+            if(e.contact.ni.y > 0.5) canJump = true;
         });
 
-        // --- HỆ THỐNG TƯƠNG TÁC (RAYCASTER) ---
         function onMouseClick() {
             if (!controls.isLocked) return;
-
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const intersects = raycaster.intersectObjects(interactiveObjects, false);
 
             if (intersects.length > 0) {
                 const object = intersects[0].object;
-                const dist = intersects[0].distance;
-                if (dist > 4) {
-                    showToast("Quá xa để tương tác!");
-                    return;
-                }
-
+                if (intersects[0].distance > 4.5) { showToast("Đến gần hơn để tương tác!"); return; }
                 handleInteraction(object);
             }
         }
 
         function handleInteraction(obj) {
             const name = obj.name;
-            
             if (name === "key") {
-                hasKey = true;
-                updateHUD();
-                scene.remove(obj);
-                showToast("Đã lấy được Chìa Khóa!");
-            }
-            else if (name === "door") {
+                hasKey = true; updateHUD(); scene.remove(obj); showToast("Đã nhặt Chìa Khóa!");
+            } else if (name === "door") {
                 if (doorOpen) return;
-                // Kiểm tra điều kiện qua màn
                 let canOpen = false;
                 if ([1, 4, 6, 7].includes(currentLevel) && hasKey) canOpen = true;
-                if (currentLevel === 2 || currentLevel === 8 || currentLevel === 10) canOpen = hasKey; // Màn 2,8 kiểm tra bằng logic trigger
                 if (canOpen) openDoor();
-                else showToast("Cửa khóa! Yêu cầu hoàn thành giải đố hoặc tìm chìa khóa.");
-            }
-            else if (name === "keypad") {
+                else showToast("Cửa đã khóa! Hãy tìm cách giải đố.");
+            } else if (name === "keypad") {
                 document.exitPointerLock();
                 document.getElementById('keypad-modal').style.display = 'block';
-                keypadInput = "";
-                document.getElementById('keypad-display').innerText = "----";
-            }
-            else if (name.startsWith("lever_")) {
-                obj.rotation.x = Math.PI / 4; // Hoạt ảnh gạt
-                leverSequence.push(name);
-                checkLeverLogic();
-            }
-            else if (name === "torch") {
-                scene.fog.near = 10; scene.fog.far = 50; // Sáng lên
-                scene.add(new THREE.AmbientLight(0x404040, 2));
-                scene.remove(obj);
-                showToast("Cầm đuốc! Phòng đã sáng.");
-            }
-            else if (name.startsWith("pillar_")) {
+                keypadInput = ""; document.getElementById('keypad-display').innerText = "----";
+            } else if (name.startsWith("lever_")) {
+                obj.rotation.x = Math.PI / 4; leverSequence.push(name); checkLeverLogic();
+            } else if (name === "torch") {
+                scene.fog.far = 50; scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+                scene.remove(obj); showToast("Đã lấy đuốc thắp sáng!");
+            } else if (name.startsWith("pillar_")) {
                 let id = parseInt(name.split("_")[1]);
                 if (id === pillarSequence) {
-                    pillarSequence++;
-                    obj.material.color.setHex(0x00ff00);
-                    showToast(`Cột ${id} đã sáng!`);
-                    if (pillarSequence > 4) { hasKey = true; showToast("Cửa đã mở khóa!"); }
-                } else {
-                    showToast("Sai thứ tự! Chọn lại từ cột thấp nhất.");
-                    pillarSequence = 1; // Reset
-                }
+                    pillarSequence++; obj.material.color.setHex(0x4cd137); showToast(`Chạm đúng trụ ${id}!`);
+                    if (pillarSequence > 4) { hasKey = true; openDoor(); }
+                } else { showToast("Sai thứ tự! Chạm từ trụ thấp nhất."); pillarSequence = 1; }
             }
         }
 
-        // --- GIAO DIỆN KEYPAD ---
         window.press = function(val) {
-            if (val === 'C') { keypadInput = ""; }
+            if (val === 'C') keypadInput = "";
             else if (val === 'OK') {
                 if (keypadInput === keypadTarget) {
-                    showToast("Mật mã đúng! Cửa mở.");
-                    hasKey = true; openDoor();
-                } else { showToast("Sai mật mã!"); }
-                document.getElementById('keypad-modal').style.display = 'none';
-                controls.lock();
-            }
-            else { if (keypadInput.length < 4) keypadInput += val; }
+                    showToast("Mật mã ĐÚNG!"); hasKey = true; openDoor();
+                } else showToast("Mật mã SAI!");
+                document.getElementById('keypad-modal').style.display = 'none'; controls.lock();
+            } else { if (keypadInput.length < 4) keypadInput += val; }
             document.getElementById('keypad-display').innerText = keypadInput === "" ? "----" : keypadInput;
         }
 
@@ -314,17 +425,14 @@ html_code = """
             const answer = ["lever_left", "lever_right", "lever_mid"];
             if (leverSequence.length === 3) {
                 if (JSON.stringify(leverSequence) === JSON.stringify(answer)) {
-                    hasKey = true; showToast("Chuỗi cần gạt chính xác!");
-                } else {
-                    showToast("Sai trình tự!"); leverSequence = [];
-                }
+                    hasKey = true; showToast("Gạt cần chính xác! Cửa mở."); openDoor();
+                } else { showToast("Sai thứ tự gạt cần!"); leverSequence = []; }
             }
         }
 
         function showToast(msg) {
             const toast = document.getElementById("toast");
-            toast.innerText = msg;
-            toast.style.display = "block";
+            toast.innerText = msg; toast.style.display = "block";
             setTimeout(() => { toast.style.display = "none"; }, 3000);
         }
 
@@ -334,66 +442,47 @@ html_code = """
             document.getElementById("inventory-text").innerText = "Túi đồ: " + (hasKey ? "Chìa khóa 🔑" : "Trống");
         }
 
-        // --- XÂY DỰNG MÀN CHƠI ---
+        /* ---------------- DỰNG DỮ LIỆU LEVEL ---------------- */
         function clearLevel() {
             objectsToUpdate.forEach(o => { world.remove(o.body); scene.remove(o.mesh); });
             interactiveObjects.forEach(o => scene.remove(o));
             objectsToUpdate = []; interactiveObjects = [];
-            
             if (doorMesh) scene.remove(doorMesh);
-            hasKey = false; doorOpen = false;
-            leverSequence = []; pillarSequence = 1;
+            hasKey = false; doorOpen = false; leverSequence = []; pillarSequence = 1;
             playerBody.position.set(0, 5, 5); playerBody.velocity.set(0,0,0);
             updateHUD();
         }
 
         function buildWalls() {
-            const mat = new THREE.MeshStandardMaterial({color: 0x555555});
-            const back = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 1), mat);
-            back.position.set(0, 5, -10); scene.add(back);
-            
-            const left = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), mat);
-            left.position.set(-10, 5, 0); scene.add(left);
-            
-            const right = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), mat);
-            right.position.set(10, 5, 0); scene.add(right);
+            const mat = new THREE.MeshStandardMaterial({color: 0x3d3d4e});
+            const back = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 1), mat); back.position.set(0, 5, -10); scene.add(back);
+            const left = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), mat); left.position.set(-10, 5, 0); scene.add(left);
+            const right = new THREE.Mesh(new THREE.BoxGeometry(1, 10, 20), mat); right.position.set(10, 5, 0); scene.add(right);
 
-            // Door
             doorMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 6, 0.5), new THREE.MeshStandardMaterial({color: 0x8e44ad}));
-            doorMesh.position.set(0, 3, -9.5);
-            doorMesh.name = "door";
-            scene.add(doorMesh);
-            interactiveObjects.push(doorMesh);
+            doorMesh.position.set(0, 3, -9.5); doorMesh.name = "door";
+            scene.add(doorMesh); interactiveObjects.push(doorMesh);
         }
 
         function createPhysicsBox(w, h, d, mass, x, y, z, color) {
-            const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2));
-            const body = new CANNON.Body({ mass: mass });
-            body.addShape(shape);
-            body.position.set(x, y, z);
-            world.addBody(body);
-
+            const body = new CANNON.Body({ mass: mass, shape: new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)) });
+            body.position.set(x, y, z); world.addBody(body);
             const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({color: color}));
-            scene.add(mesh);
-            objectsToUpdate.push({ mesh, body });
-            return {mesh, body};
+            scene.add(mesh); objectsToUpdate.push({ mesh, body });
         }
 
         function createItem(type, x, y, z) {
             let mesh;
             if (type === "key") {
-                mesh = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.1, 8, 16), new THREE.MeshStandardMaterial({color: 0xffd700}));
+                mesh = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.1, 8, 16), new THREE.MeshStandardMaterial({color: 0xf1c40f}));
                 mesh.name = "key";
             } else if (type === "keypad") {
-                mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.2), new THREE.MeshStandardMaterial({color: 0x222222}));
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.2), new THREE.MeshStandardMaterial({color: 0x2c3e50}));
                 mesh.name = "keypad";
             } else if (type === "lever") {
-                mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), new THREE.MeshStandardMaterial({color: 0xff0000}));
-                mesh.rotation.x = -Math.PI / 4;
+                mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), new THREE.MeshStandardMaterial({color: 0xe74c3c}));
             }
-            mesh.position.set(x, y, z);
-            scene.add(mesh);
-            interactiveObjects.push(mesh);
+            mesh.position.set(x, y, z); scene.add(mesh); interactiveObjects.push(mesh);
             return mesh;
         }
 
@@ -408,135 +497,73 @@ html_code = """
 
         function nextLevel() {
             if (currentLevel < 10) {
-                currentLevel++;
-                loadLevel(currentLevel);
+                currentLevel++; loadLevel(currentLevel);
             } else {
-                alert("CHÚC MỪNG BẠN ĐÃ THOÁT KHỎI 10 CĂN PHÒNG!");
-                currentLevel = 1; loadLevel(1);
+                alert("XUẤT SẮC! BẠN ĐÃ THOÁT KHỎI TẤT CẢ 10 CĂN PHÒNG!");
+                returnToMainMenu();
             }
         }
 
         function loadLevel(lvl) {
-            clearLevel();
-            buildWalls();
-            scene.fog.near = 0.1; scene.fog.far = 100; // Reset fog
+            clearLevel(); buildWalls();
+            scene.fog.far = 25;
 
             switch(lvl) {
-                case 1:
-                    createPhysicsBox(2, 2, 2, 0, 0, 1, 0, 0x8B4513); // Bàn
-                    createItem("key", 0, 2.5, 0);
-                    break;
+                case 1: createPhysicsBox(2, 2, 2, 0, 0, 1, 0, 0x8B4513); createItem("key", 0, 2.5, 0); break;
                 case 2:
-                    createPhysicsBox(1.5, 1.5, 1.5, 5, 0, 5, 2, 0x3498db); // Hộp đẩy
-                    // Nút bấm trên sàn (Trigged by update loop)
+                    createPhysicsBox(1.5, 1.5, 1.5, 5, 0, 5, 2, 0x3498db);
                     const pad = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.2), new THREE.MeshStandardMaterial({color: 0xe74c3c}));
-                    pad.position.set(0, 0.1, -4); pad.name="pad"; scene.add(pad); interactiveObjects.push(pad);
-                    break;
-                case 3:
-                    createItem("keypad", 3, 3, -9.8); keypadTarget = "312";
-                    // Wall Text Fake
-                    const txtBox = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 0.1), new THREE.MeshStandardMaterial({color: 0xffffff}));
-                    txtBox.position.set(-3, 4, -9.8); scene.add(txtBox);
-                    break;
-                case 4:
-                    createPhysicsBox(3, 1, 3, 0, 0, 1, 0, 0x27ae60);
-                    createPhysicsBox(3, 1, 3, 0, 0, 3, -5, 0x27ae60);
-                    createItem("key", 0, 4.5, -5);
-                    break;
-                case 5:
-                    const l1 = createItem("lever", -3, 3, -9.8); l1.name="lever_left";
-                    const l2 = createItem("lever", 0, 3, -9.8); l2.name="lever_mid";
-                    const l3 = createItem("lever", 3, 3, -9.8); l3.name="lever_right";
-                    break;
-                case 6:
-                    scene.fog.near = 1; scene.fog.far = 3; // Phòng tối
-                    const torch = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,1), new THREE.MeshBasicMaterial({color:0xffaa00}));
-                    torch.position.set(3, 1, 0); torch.name="torch"; scene.add(torch); interactiveObjects.push(torch);
-                    createItem("key", -4, 1, -4);
-                    break;
-                case 7:
-                    createPhysicsBox(2, 2, 2, 5, -3, 2, 0, 0x9b59b6);
-                    createPhysicsBox(2, 2, 2, 5, 3, 2, 0, 0x9b59b6);
-                    createItem("key", 0, 6, -8); // Trên cao
-                    break;
+                    pad.position.set(0, 0.1, -4); scene.add(pad); break;
+                case 3: createItem("keypad", 3, 3, -9.8); keypadTarget = "312"; break;
+                case 4: createPhysicsBox(3, 1, 3, 0, 0, 1, 0, 0x27ae60); createPhysicsBox(3, 1, 3, 0, 0, 3, -5, 0x27ae60); createItem("key", 0, 4.5, -5); break;
+                case 5: createItem("lever", -3, 3, -9.8).name="lever_left"; createItem("lever", 0, 3, -9.8).name="lever_mid"; createItem("lever", 3, 3, -9.8).name="lever_right"; break;
+                case 6: scene.fog.far = 4; const torch = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,1), new THREE.MeshBasicMaterial({color:0xffaa00})); torch.position.set(3, 1, 0); torch.name="torch"; scene.add(torch); interactiveObjects.push(torch); createItem("key", -4, 1, -4); break;
+                case 7: createPhysicsBox(2, 2, 2, 5, -3, 2, 0, 0x9b59b6); createPhysicsBox(2, 2, 2, 5, 3, 2, 0, 0x9b59b6); createItem("key", 0, 6, -8); break;
                 case 8:
-                    const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,2), new THREE.MeshStandardMaterial({color:0x34495e})); p1.position.set(-4,1,-5); p1.name="pillar_1"; scene.add(p1); interactiveObjects.push(p1);
-                    const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,3), new THREE.MeshStandardMaterial({color:0x34495e})); p2.position.set(-1.5,1.5,-5); p2.name="pillar_2"; scene.add(p2); interactiveObjects.push(p2);
-                    const p3 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,4), new THREE.MeshStandardMaterial({color:0x34495e})); p3.position.set(1.5,2,-5); p3.name="pillar_3"; scene.add(p3); interactiveObjects.push(p3);
-                    const p4 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,5), new THREE.MeshStandardMaterial({color:0x34495e})); p4.position.set(4,2.5,-5); p4.name="pillar_4"; scene.add(p4); interactiveObjects.push(p4);
-                    break;
-                case 9:
-                    createItem("keypad", 0, 3, -9.8); keypadTarget = "8";
-                    break;
-                case 10:
-                    createPhysicsBox(1.5, 1.5, 1.5, 5, -5, 5, 2, 0x3498db); // Đẩy
-                    const btn = new THREE.Mesh(new THREE.BoxGeometry(2,0.2,2), new THREE.MeshStandardMaterial({color:0xe74c3c})); btn.position.set(-5, 0.1, -5); scene.add(btn);
-                    createItem("keypad", 3, 3, -9.8); keypadTarget = "2026";
-                    break;
+                    for(let i=1; i<=4; i++) {
+                        let p = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,1+i), new THREE.MeshStandardMaterial({color:0x34495e}));
+                        p.position.set(-5 + i*2.5, (1+i)/2, -5); p.name="pillar_"+i; scene.add(p); interactiveObjects.push(p);
+                    } break;
+                case 9: createItem("keypad", 0, 3, -9.8); keypadTarget = "8"; break;
+                case 10: createPhysicsBox(1.5, 1.5, 1.5, 5, -5, 5, 2, 0x3498db); createItem("keypad", 3, 3, -9.8); keypadTarget = "2026"; break;
             }
         }
 
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- GAME LOOP ---
         function animate() {
             requestAnimationFrame(animate);
-
-            if (controls.isLocked === true) {
-                // Vật lý FPS Movement
-                let dt = (Date.now() - time) / 1000;
-                world.step(1/60, dt, 3);
-                
-                // Cập nhật hướng di chuyển theo góc camera
-                camera.getWorldDirection(direction);
-                direction.y = 0; direction.normalize();
-                
-                const right = new THREE.Vector3();
-                right.crossVectors(camera.up, direction).normalize();
-
-                const speed = 20;
+            if (controls.isLocked) {
+                let dt = (Date.now() - time) / 1000; world.step(1/60, dt, 3);
+                let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+                let right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
                 let vX = 0, vZ = 0;
-                
-                if (moveForward) { vX += direction.x * speed; vZ += direction.z * speed; }
-                if (moveBackward) { vX -= direction.x * speed; vZ -= direction.z * speed; }
-                if (moveLeft) { vX -= right.x * speed; vZ -= right.z * speed; }
-                if (moveRight) { vX += right.x * speed; vZ += right.z * speed; }
+                if (moveForward) { vX += dir.x * 20; vZ += dir.z * 20; }
+                if (moveBackward) { vX -= dir.x * 20; vZ -= dir.z * 20; }
+                if (moveLeft) { vX -= right.x * 20; vZ -= right.z * 20; }
+                if (moveRight) { vX += right.x * 20; vZ += right.z * 20; }
 
-                // Áp dụng lực cho Physics Body
-                playerBody.velocity.x = vX;
-                playerBody.velocity.z = vZ;
-
-                // Sync Camera với Cannon.js Body
+                playerBody.velocity.x = vX; playerBody.velocity.z = vZ;
                 controls.getObject().position.copy(playerBody.position);
-                controls.getObject().position.y += 1; // Mắt cao hơn tâm cơ thể
-                
-                // Đồng bộ hộp vật lý
+                controls.getObject().position.y += 1;
+
                 objectsToUpdate.forEach(obj => {
                     obj.mesh.position.copy(obj.body.position);
                     obj.mesh.quaternion.copy(obj.body.quaternion);
                 });
 
-                // Logic đặc biệt Level 2 & 10 (Công tắc đè bằng hộp)
-                if ((currentLevel === 2 || currentLevel === 10) && !hasKey && objectsToUpdate.length > 0) {
-                    let boxBody = objectsToUpdate[0].body;
-                    let targetX = currentLevel === 2 ? 0 : -5;
-                    if (Math.abs(boxBody.position.x - targetX) < 1.5 && Math.abs(boxBody.position.z - -4) < 1.5) {
-                        hasKey = true; updateHUD(); showToast("Đã kích hoạt nút bấm! Cửa mở.");
+                if (currentLevel === 2 && !hasKey && objectsToUpdate.length > 0) {
+                    let b = objectsToUpdate[0].body;
+                    if (Math.abs(b.position.x) < 1.5 && Math.abs(b.position.z - -4) < 1.5) {
+                        hasKey = true; updateHUD(); showToast("Đã kích hoạt nút bấm vật lý! Cửa mở."); openDoor();
                     }
                 }
-                
-                // Quay chìa khóa tự động
-                interactiveObjects.forEach(obj => {
-                    if(obj.name === "key") obj.rotation.y += 0.05;
-                });
+                interactiveObjects.forEach(obj => { if(obj.name === "key") obj.rotation.y += 0.05; });
             }
-
-            time = Date.now();
-            renderer.render(scene, camera);
+            time = Date.now(); renderer.render(scene, camera);
         }
     </script>
 </body>
