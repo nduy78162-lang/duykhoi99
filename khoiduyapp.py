@@ -548,4 +548,164 @@ def show_leaderboard():
 
 
 def screen_menu():
-    st.markdown("<p class='title'>⏳ Escape Time</p><p class='sub'>Puzzle Games · Bất ngờ mới
+        st.markdown("<p class='title'>⏳ Escape Time</p><p class='sub'>Puzzle Games · Bất ngờ mới mỗi lần chơi</p>", unsafe_allow_html=True)
+    st.write(
+        "Bạn bị nhốt trong một dinh thự cổ có **ba căn phòng**. Giải mọi câu đố, "
+        "gom vật phẩm và tìm đường thoát ra trước khi hết giờ!"
+    )
+    name = st.text_input("Tên người chơi", value="Người bí ẩn", max_chars=16)
+    diff = st.radio(
+        "Độ khó",
+        list(DIFFICULTY),
+        index=1,
+        format_func=lambda d: f"{d} — {DIFFICULTY[d][3]}",
+    )
+    if st.button("▶️ Bắt đầu thoát hiểm", type="primary", use_container_width=True):
+        start_game(diff, name)
+        st.rerun()
+    with st.expander("📖 Cách chơi"):
+        st.markdown(
+            "- Chọn một **vật thể** trong phòng để quan sát, nhập mã hoặc dùng vật phẩm.\n"
+            "- Vật phẩm tìm được nằm trong **🎒 Túi đồ**.\n"
+            f"- Bí quá? Dùng **💡 Gợi ý**, mỗi lần bị trừ {HINT_PENALTY} giây.\n"
+            "- Mã két, mật thư, câu đố và dãy số **khác nhau ở mỗi lượt chơi**.\n"
+            "- Điểm = thời gian còn lại + thưởng không dùng gợi ý, nhân hệ số độ khó."
+        )
+    show_leaderboard()
+
+
+@st.fragment(run_every=1)
+def timer_box():
+    g = st.session_state.g
+    left = time_left(g)
+    if g["phase"] == "play" and left <= 0:
+        g["phase"] = "lose"
+        g["end"] = time.time()
+        st.rerun()
+    left = max(0, left)
+    cls = "danger" if left < 60 else "warn" if left < 180 else "ok"
+    st.markdown(f"<div class='timer {cls}'>⏳ {fmt(left)}</div>", unsafe_allow_html=True)
+    st.progress(max(0.0, min(1.0, left / g["duration"])))
+
+
+def show_inventory(g, P):
+    if not g["inv"]:
+        st.caption("🎒 Túi đồ: trống")
+        return
+    with st.expander(f"🎒 Túi đồ ({len(g['inv'])})", expanded=True):
+        for name in g["inv"]:
+            emo, desc = ITEMS[name]
+            if name == "Mật thư":
+                desc = f"Tờ giấy ghi: **{P['cipher']}**"
+            st.markdown(f"{emo} **{name}** — {desc}")
+
+
+def screen_play(g):
+    P = g["P"]
+    room = ROOMS[g["room"]]
+    st.markdown("<p class='title' style='font-size:1.5rem'>⏳ Escape Time</p>", unsafe_allow_html=True)
+    timer_box()
+    st.info(g["log"][-1])
+    st.markdown(f"### {room['name']} · Phòng {g['room'] + 1}/3")
+    st.write(room["intro"])
+
+    labels = [label for _, label in room["objs"]]
+    pick = st.radio(
+        "Bạn muốn xem gì?",
+        labels,
+        index=None,
+        horizontal=True,
+        key=f"focus_{g['gid']}_{g['room']}",
+    )
+    if pick:
+        oid = next(i for i, label in room["objs"] if label == pick)
+        with st.container(border=True):
+            st.markdown(f"#### {pick}")
+            HANDLERS[oid](g, P)
+
+    show_inventory(g, P)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button(
+            f"💡 Gợi ý ({g['hints']}) · −{HINT_PENALTY}s",
+            disabled=g["hints"] <= 0,
+            use_container_width=True,
+        ):
+            g["hints"] -= 1
+            g["used_hints"] += 1
+            g["penalty"] += HINT_PENALTY
+            say(g, "💡 **Gợi ý:** " + current_hint(g, P))
+            st.rerun()
+    with c2:
+        if st.button("🏳️ Bỏ cuộc", use_container_width=True):
+            g["phase"] = "menu"
+            st.rerun()
+
+    if len(g["log"]) > 1:
+        with st.expander("📜 Nhật ký"):
+            for m in reversed(g["log"]):
+                st.markdown(f"- {m}")
+
+
+def screen_win(g):
+    if not g.get("ballooned"):
+        g["ballooned"] = True
+        st.balloons()
+    st.markdown("<p class='title'>🎉 BẠN ĐÃ THOÁT!</p>", unsafe_allow_html=True)
+    st.markdown(f"<div class='stars'>{'⭐' * g['stars']}{'☆' * (3 - g['stars'])}</div>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Điểm", g["score"])
+    c2.metric("Còn lại", fmt(max(0, time_left(g))))
+    c3.metric("Gợi ý đã dùng", g["used_hints"])
+    st.success(f"**{g['name']}** xếp hạng **#{g['rank']}** trên bảng vàng (độ khó {g['diff']}).")
+    play_again(g)
+    show_leaderboard()
+
+
+def screen_lose(g):
+    P = g["P"]
+    st.markdown("<p class='title'>⌛ HẾT GIỜ!</p>", unsafe_allow_html=True)
+    st.error("Cánh cửa sau lưng khóa lại mãi mãi… Nhưng bạn có thể thử lại với một căn phòng hoàn toàn mới.")
+    with st.expander("🔍 Xem đáp án của lượt này"):
+        st.markdown(
+            f"- Két sắt: **{P['safe']}**\n"
+            f"- Mật khẩu cửa gỗ: **{P['word']}** (mật thư: {P['cipher']}, lùi {P['shift']})\n"
+            "- Thứ tự đổ lọ: " + " → ".join(POTION_SOLUTION) + "\n"
+            f"- Tủ khóa số: **{P['keypad']}**\n"
+            f"- Mã thoát hiểm: **{P['final']}** (dãy 1: {P['seq1'][2]}; dãy 2: {P['seq2'][2]})"
+        )
+    play_again(g)
+    show_leaderboard()
+
+
+def play_again(g):
+    if st.button("🔄 Chơi lại (câu đố mới)", type="primary", use_container_width=True):
+        start_game(g["diff"], g["name"])
+        st.rerun()
+    if st.button("🏠 Về màn hình chính", use_container_width=True):
+        g["phase"] = "menu"
+        st.rerun()
+
+
+# ----------------------------------------------------------------------------
+# CHẠY GAME
+# ----------------------------------------------------------------------------
+st.markdown(CSS, unsafe_allow_html=True)
+
+if "g" not in st.session_state:
+    st.session_state.g = {"phase": "menu"}
+game = st.session_state.g
+
+if game["phase"] == "play" and time_left(game) <= 0:
+    game["phase"] = "lose"
+    game["end"] = time.time()
+
+if game["phase"] == "menu":
+    screen_menu()
+elif game["phase"] == "play":
+    screen_play(game)
+elif game["phase"] == "win":
+    screen_win(game)
+else:
+    screen_lose(game)
