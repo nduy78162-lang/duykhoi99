@@ -1,14 +1,3 @@
-"""
-⏳ ESCAPE TIME: PUZZLE GAMES — game thoát phòng giải đố bằng Streamlit
-=====================================================================
-Cài đặt:  pip install "streamlit>=1.37"
-Chạy:     streamlit run escape_time.py
-
-- 3 căn phòng, 13 vật thể để khám phá, đếm ngược theo thời gian thực
-- Mỗi lần chơi: mã két, mật thư, câu đố, dãy số... đều được tạo ngẫu nhiên
-- Túi đồ, hệ thống gợi ý (trừ giờ), hộp quà bất ngờ, bảng vàng điểm cao
-"""
-
 import json
 import random
 import time
