@@ -714,3 +714,242 @@ with st.expander("🎮 Hướng Dẫn Tiến Trình Adventure Mode"):
     * **Màn 1-2:** Bãi cỏ mở rộng ra **3 làn**. Trồng thêm Sunflower để có nhiều Mặt trời hơn. Tiêu diệt đợt Zombie để nhận **Cherry Bomb**.
     * **Màn 1-3:** Bãi cỏ mở rộng đủ **5 làn chuẩn PvZ**. Mở khóa **Wall-nut** và **Xẻng nhổ cây (Shovel 🧹)** để đối đầu với các đợt **Buckethead Zombie** đội xô sắt trâu bò!
     """)
+import streamlit as st
+import streamlit.components.v1 as components
+
+# Cấu hình trang Streamlit
+st.set_page_config(
+    page_title="Plants vs Zombies: Snow Pea Edition",
+    page_icon="❄️",
+    layout="wide"
+)
+
+st.markdown("""
+<style>
+    .stApp { background-color: #0f1c0f; color: #ffffff; }
+    header, footer { visibility: hidden; }
+    h1 { color: #00e5ff !important; font-family: 'Trebuchet MS', sans-serif; text-align: center; margin-bottom: 2px; text-shadow: 2px 2px #000; }
+    p { text-align: center; color: #b2ebf2; font-family: sans-serif; margin-bottom: 10px; }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("❄️ PLANTS VS. ZOMBIES: SNOW PEA EDITION 🧟")
+st.markdown("Đã bổ sung **Đậu Băng (Snow Pea ❄️)** - Bắn đạn tuyết làm chậm 50% tốc độ di chuyển của Zombie!")
+
+# Biến chuỗi chứa mã HTML/JavaScript cho Game
+pvz_snowpea_html = """<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { background: #081008; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        
+        #game-container {
+            position: relative;
+            width: 900px;
+            height: 560px;
+            border: 4px solid #3d2514;
+            border-radius: 10px;
+            box-shadow: 0 0 35px rgba(0,229,255,0.3);
+            background: #111;
+        }
+        
+        canvas { display: block; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="pvzCanvas" width="900" height="560"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('pvzCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const ROWS = 5;
+        const COLS = 9;
+        const CELL_W = 80;
+        const CELL_H = 82;
+        const OFFSET_X = 140;
+        const OFFSET_Y = 85;
+
+        // Dữ liệu các Level
+        const LEVELS_DATA = [
+            {
+                id: "1-1",
+                name: "LEVEL 1-1",
+                activeRows: [2],
+                unlockedPlants: ['peashooter', 'snowpea'],
+                zombieQueue: ['normal', 'normal', 'normal', 'flag', 'normal'],
+                rewardIcon: '🌻',
+                rewardDesc: 'Tạo thêm 25 Mặt Trời định kỳ!'
+            },
+            {
+                id: "1-2",
+                name: "LEVEL 1-2",
+                activeRows: [1, 2, 3],
+                unlockedPlants: ['peashooter', 'sunflower', 'snowpea'],
+                zombieQueue: ['normal', 'conehead', 'normal', 'flag', 'normal', 'conehead'],
+                rewardIcon: '🍒',
+                rewardDesc: 'Nổ tung tất cả Zombie trong diện tích 3x3!'
+            },
+            {
+                id: "1-3",
+                name: "LEVEL 1-3",
+                activeRows: [0, 1, 2, 3, 4],
+                unlockedPlants: ['peashooter', 'sunflower', 'snowpea', 'cherry', 'wallnut'],
+                zombieQueue: ['normal', 'conehead', 'buckethead', 'flag', 'conehead', 'buckethead', 'normal'],
+                rewardIcon: '🏆',
+                rewardDesc: 'Chúc mừng bạn đã chinh phục Adventure Mode!'
+            }
+        ];
+
+        let currentLevelIndex = 0;
+        let currentLevel = LEVELS_DATA[currentLevelIndex];
+
+        let suns = 200;
+        let gameState = 'PLAYING';
+        let selectedTool = null;
+        
+        let spawnedZombiesCount = 0;
+        let totalZombiesInLevel = 0;
+        let killedZombiesInLevel = 0;
+        let hugeWaveTriggered = false;
+        let hugeWaveBannerTimer = 0;
+
+        let grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+        let lawnMowers = [];
+        let plants = [];
+        let zombies = [];
+        let peas = [];
+        let fallingSuns = [];
+        let explosions = [];
+
+        // Khai báo cây Snow Pea (Đậu Băng) trong danh sách cây
+        const ALL_PLANTS = {
+            'peashooter': { id: 'peashooter', name: 'Peashooter', cost: 100, icon: '🫛' },
+            'sunflower':  { id: 'sunflower',  name: 'Sunflower',  cost: 50,  icon: '🌻' },
+            'snowpea':    { id: 'snowpea',    name: 'Snow Pea',   cost: 175, icon: '❄️' },
+            'wallnut':    { id: 'wallnut',    name: 'Wall-nut',   cost: 50,  icon: '🧱' },
+            'cherry':     { id: 'cherry',     name: 'Cherry Bomb',cost: 150, icon: '🍒' }
+        };
+
+        function initLevel(levelIdx) {
+            currentLevelIndex = levelIdx;
+            currentLevel = LEVELS_DATA[currentLevelIndex];
+            
+            suns = 200;
+            gameState = 'PLAYING';
+            selectedTool = null;
+            spawnedZombiesCount = 0;
+            killedZombiesInLevel = 0;
+            totalZombiesInLevel = currentLevel.zombieQueue.length;
+            hugeWaveTriggered = false;
+            hugeWaveBannerTimer = 0;
+
+            grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+            plants = [];
+            zombies = [];
+            peas = [];
+            fallingSuns = [];
+            explosions = [];
+
+            lawnMowers = [];
+            for (let r = 0; r < ROWS; r++) {
+                if (currentLevel.activeRows.includes(r)) {
+                    lawnMowers.push({ row: r, x: OFFSET_X - 45, y: OFFSET_Y + r * CELL_H + 20, active: false, used: false });
+                }
+            }
+        }
+
+        function drawUI() {
+            ctx.fillStyle = '#2b1810';
+            ctx.fillRect(0, 0, canvas.width, OFFSET_Y);
+            ctx.strokeStyle = '#5a3d28';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(0, 0, canvas.width, OFFSET_Y);
+
+            ctx.fillStyle = '#170c06';
+            ctx.fillRect(12, 12, 95, 60);
+            ctx.strokeRect(12, 12, 95, 60);
+            ctx.font = '24px sans-serif';
+            ctx.fillText('☀️', 18, 49);
+            ctx.fillStyle = '#ffeb3b';
+            ctx.font = 'bold 19px sans-serif';
+            ctx.fillText(suns, 54, 48);
+
+            let cardIndex = 0;
+            currentLevel.unlockedPlants.forEach(pId => {
+                const card = ALL_PLANTS[pId];
+                const x = 120 + cardIndex * 92;
+                const y = 10;
+                const w = 85;
+                const h = 64;
+
+                const canAfford = suns >= card.cost;
+                ctx.fillStyle = selectedTool === card.id ? '#388e3c' : (canAfford ? '#3b281a' : '#21150e');
+                ctx.fillRect(x, y, w, h);
+                ctx.strokeStyle = selectedTool === card.id ? '#76ff03' : (card.id === 'snowpea' ? '#00e5ff' : '#5a3d28');
+                ctx.lineWidth = selectedTool === card.id ? 3 : 1.5;
+                ctx.strokeRect(x, y, w, h);
+
+                ctx.font = '24px sans-serif';
+                ctx.fillText(card.icon, x + 5, y + 42);
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillStyle = canAfford ? '#ffeb3b' : '#777777';
+                ctx.fillText(card.cost + '☀️', x + 38, y + 40);
+
+                cardIndex++;
+            });
+
+            if (currentLevel.unlockedPlants.includes('wallnut')) {
+                const shovelX = 120 + cardIndex * 92 + 8;
+                ctx.fillStyle = selectedTool === 'shovel' ? '#c62828' : '#3b281a';
+                ctx.fillRect(shovelX, 10, 55, 64);
+                ctx.strokeStyle = selectedTool === 'shovel' ? '#ff5252' : '#5a3d28';
+                ctx.strokeRect(shovelX, 10, 55, 64);
+                ctx.font = '28px sans-serif';
+                ctx.fillText('🧹', shovelX + 10, 50);
+            }
+
+            const barW = 160;
+            const barH = 18;
+            const barX = canvas.width - barW - 20;
+            const barY = 22;
+
+            ctx.fillStyle = '#111';
+            ctx.fillRect(barX, barY, barW, barH);
+            ctx.strokeStyle = '#888';
+            ctx.strokeRect(barX, barY, barW, barH);
+
+            const progressRatio = Math.min(1, killedZombiesInLevel / totalZombiesInLevel);
+            ctx.fillStyle = '#4caf50';
+            ctx.fillRect(barX, barY, barW * progressRatio, barH);
+
+            ctx.font = '16px sans-serif';
+            ctx.fillText('🚩', barX + barW * 0.75 - 8, barY + 15);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText(currentLevel.name, barX + 30, barY + 36);
+        }
+
+        function drawLawn() {
+            for (let r = 0; r < ROWS; r++) {
+                const isActive = currentLevel.activeRows.includes(r);
+                for (let c = 0; c < COLS; c++) {
+                    const x = OFFSET_X + c * CELL_W;
+                    const y = OFFSET_Y + r * CELL_H;
+
+                    if (isActive) {
+                        ctx.fillStyle = (r + c) % 2 === 0 ? '#43a047' : '#388e3c';
+                    } else {
+                        ctx.fillStyle = '#2d1f15';
+                    }
+                    ctx.fillRect(x, y, CELL_W, CELL_H);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+                    ctx.strokeRect(x, y, CELL_W, CELL_H);
+                }
+            }
