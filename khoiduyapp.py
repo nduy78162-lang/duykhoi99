@@ -1,279 +1,551 @@
+"""
+⏳ ESCAPE TIME: PUZZLE GAMES — game thoát phòng giải đố bằng Streamlit
+=====================================================================
+Cài đặt:  pip install "streamlit>=1.37"
+Chạy:     streamlit run escape_time.py
+
+- 3 căn phòng, 13 vật thể để khám phá, đếm ngược theo thời gian thực
+- Mỗi lần chơi: mã két, mật thư, câu đố, dãy số... đều được tạo ngẫu nhiên
+- Túi đồ, hệ thống gợi ý (trừ giờ), hộp quà bất ngờ, bảng vàng điểm cao
+"""
+
+import json
+import random
+import time
+from pathlib import Path
+
 import streamlit as st
 
 st.set_page_config(
-    page_title="3D Multi-Stage Puzzle Game", page_icon="🎮", layout="wide"
+    page_title="Escape Time: Puzzle Games",
+    page_icon="⏳",
+    layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
-# Nhúng mã nguồn HTML/JS/Three.js trực tiếp vào Streamlit
-html_code = """
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Puzzle Adventure</title>
-    <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
-        #ui-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
-            padding: 20px; box-sizing: border-box;
-        }
-        .hud { pointer-events: auto; background: rgba(0,0,0,0.7); color: #fff; padding: 15px 25px; border-radius: 12px; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); }
-        #controls {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(2, 60px);
-            gap: 10px; pointer-events: auto; z-index: 10;
-        }
-        .btn-ctrl { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; font-size: 20px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
-        .btn-ctrl:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
-        #btn-up { grid-column: 2; grid-row: 1; }
-        #btn-left { grid-column: 1; grid-row: 2; }
-        #btn-down { grid-column: 2; grid-row: 2; }
-        #btn-right { grid-column: 3; grid-row: 2; }
-        
-        /* Modal Màn chơi */
-        #modal {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(20, 20, 30, 0.95); padding: 30px; border-radius: 20px; color: white;
-            text-align: center; pointer-events: auto; width: 350px; border: 2px solid #00ffcc;
-            box-shadow: 0 0 30px rgba(0,255,204,0.4); display: none;
-        }
-        input, button.action-btn { padding: 12px; margin: 10px 0; width: 80%; border-radius: 8px; border: none; font-size: 16px; }
-        button.action-btn { background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button.action-btn:hover { background: #00b386; color: #fff; }
-    </style>
-</head>
-<body>
-    <div id="ui-layer">
-        <div class="hud" id="stage-title">Màn 1: Đoán Số May Mắn</div>
-        <div id="modal">
-            <h2 id="modal-title">Tiêu đề</h2>
-            <div id="modal-content">Nội dung</div>
-        </div>
-    </div>
+if not hasattr(st, "fragment"):
+    st.error("Game cần Streamlit >= 1.37. Hãy chạy: pip install -U streamlit")
+    st.stop()
 
-    <!-- Nút điều khiển di động -->
-    <div id="controls">
-        <button class="btn-ctrl" id="btn-up">▲</button>
-        <button class="btn-ctrl" id="btn-left">◀</button>
-        <button class="btn-ctrl" id="btn-down">▼</button>
-        <button class="btn-ctrl" id="btn-right">▶</button>
-    </div>
+# ----------------------------------------------------------------------------
+# CẤU HÌNH
+# ----------------------------------------------------------------------------
+SCORE_FILE = Path(__file__).with_name("escape_time_scores.json")
+HINT_PENALTY = 30  # giây bị trừ mỗi lần xin gợi ý
 
-    <!-- Thư viện Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        let scene, camera, renderer, player;
-        let currentStage = 1;
-        let keys = {w: false, a: false, s: false, d: false};
-        let touchMove = {x: 0, y: 0};
-        let isDragging = false, previousMousePosition = {x: 0, y: 0};
+# tên độ khó: (tổng giây, số gợi ý, hệ số điểm, mô tả)
+DIFFICULTY = {
+    "Dễ": (15 * 60, 4, 1.0, "15 phút · 4 gợi ý"),
+    "Thường": (10 * 60, 3, 1.5, "10 phút · 3 gợi ý"),
+    "Khó": (6 * 60, 1, 2.0, "6 phút · 1 gợi ý"),
+}
 
-        init();
-        animate();
+ITEMS = {
+    "Chìa khóa đồng": ("🗝️", "Chiếc chìa khóa đồng nhỏ, vẫn còn âm ấm."),
+    "Mật thư": ("📜", None),  # mô tả tạo động
+    "Dung dịch phát sáng": ("🧪", "Chất lỏng xanh lơ, tỏa ánh sáng dịu."),
+    "Thẻ từ": ("💳", "Thẻ từ có vạch đỏ, in chữ 'CỬA THÉP'."),
+    "Bánh răng vàng": ("⚙️", "Bánh răng vàng nặng tay, như khớp với một cỗ máy lớn."),
+}
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a1a2e);
+EMOJI = ["🌸", "🐦", "⭐", "🌙"]
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 5, 10);
+WORDS = ["ESCAPE", "SECRET", "PUZZLE", "HIDDEN", "ORIGIN", "SILVER"]
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+# (câu đố, chữ số đáp án)
+RIDDLES = [
+    [("Số nguyên tố chẵn duy nhất", 2), ("Số hoàn hảo nhỏ nhất", 6), ("Bình phương của 3", 9)],
+    [("Số ngày trong một tuần", 7), ("Số cạnh của hình tam giác", 3), ("Số mặt của một con xúc xắc", 6)],
+    [("Số chân của con nhện", 8), ("Số ngón tay trên một bàn tay", 5), ("Số màu trong cầu vồng", 7)],
+]
 
-            // Ánh sáng
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(10, 20, 10);
-            scene.add(dirLight);
+# (dãy số, đáp án 2 chữ số, quy luật)
+SEQ1 = [
+    ("2, 6, 12, 20, ?", 30, "các tích n×(n+1)"),
+    ("3, 8, 15, 24, ?", 35, "bình phương trừ 1"),
+    ("1, 4, 9, 16, 25, ?", 36, "các số chính phương"),
+    ("5, 10, 20, 40, ?", 80, "nhân đôi mỗi bước"),
+    ("4, 7, 11, 16, ?", 22, "hiệu tăng dần 3, 4, 5…"),
+]
+SEQ2 = [
+    ("1, 1, 2, 3, 5, 8, ?", 13, "mỗi số bằng tổng hai số liền trước"),
+    ("1, 2, 4, 7, 11, 16, ?", 22, "hiệu tăng dần 1, 2, 3…"),
+    ("2, 3, 5, 7, 11, 13, ?", 17, "các số nguyên tố"),
+    ("100, 91, 82, 73, ?", 64, "giảm 9 mỗi bước"),
+    ("3, 6, 12, 24, ?", 48, "nhân đôi mỗi bước"),
+]
 
-            loadStage(currentStage);
+# Thứ tự đổ đúng của 4 lọ hóa chất
+POTION_OPTIONS = ["🔴 Đỏ", "🟢 Lục", "🟡 Vàng", "🔵 Xanh dương"]
+POTION_SOLUTION = ["🔵 Xanh dương", "🟡 Vàng", "🔴 Đỏ", "🟢 Lục"]
 
-            // Sự kiện bàn phím
-            window.addEventListener('keydown', (e) => handleKey(e, true));
-            window.addEventListener('keyup', (e) => handleKey(e, false));
+ROOMS = [
+    {
+        "name": "📚 Thư phòng cổ",
+        "intro": (
+            "Bạn tỉnh dậy trong một thư phòng cổ. Đèn dầu leo lét, mùi giấy cũ phảng phất. "
+            "Cánh cửa gỗ phía sau lưng đã bị khóa chặt. 🕯️"
+        ),
+        "objs": [
+            ("painting", "🖼️ Bức tranh"),
+            ("shelf", "📚 Giá sách"),
+            ("safe", "🔐 Két sắt"),
+            ("desk", "🗄️ Bàn làm việc"),
+            ("door0", "🚪 Cửa gỗ"),
+        ],
+    },
+    {
+        "name": "🧪 Phòng thí nghiệm",
+        "intro": (
+            "Phía sau cánh cửa là một phòng thí nghiệm bỏ hoang. Ống nghiệm sủi bọt lách tách, "
+            "đèn huỳnh quang nhấp nháy. Ở góc phòng có một hộp quà lạ lẫm. 🎁"
+        ),
+        "objs": [
+            ("bottles", "🧪 Bàn hóa chất"),
+            ("wall", "🧱 Bức tường"),
+            ("cabinet", "🗃️ Tủ khóa số"),
+            ("gift", "🎁 Hộp quà"),
+            ("door1", "🚪 Cửa thép"),
+        ],
+    },
+    {
+        "name": "🕰️ Phòng đồng hồ",
+        "intro": (
+            "Căn phòng cuối cùng. Tiếng tích tắc vang khắp nơi, nhưng chiếc đồng hồ khổng lồ giữa phòng "
+            "lại đứng im. Cánh cửa thoát hiểm ở ngay đó… chỉ còn thiếu mật mã. ⏰"
+        ),
+        "objs": [
+            ("clock", "🕰️ Đồng hồ cổ"),
+            ("board", "📝 Bảng phấn"),
+            ("exit", "🚪 Cửa thoát hiểm"),
+        ],
+    },
+]
 
-            // Sự kiện chuột xoay màn hình
-            window.addEventListener('mousedown', (e) => { isDragging = true; previousMousePosition = {x: e.clientX, y: e.clientY}; });
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                let deltaX = e.clientX - previousMousePosition.x;
-                camera.rotation.y -= deltaX * 0.005;
-                previousMousePosition = {x: e.clientX, y: e.clientY};
-            });
-            window.addEventListener('mouseup', () => isDragging = false);
-
-            // Sự kiện cảm ứng điện thoại
-            let touchStartX = 0;
-            window.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
-            window.addEventListener('touchmove', (e) => {
-                let deltaX = e.touches[0].clientX - touchStartX;
-                camera.rotation.y -= deltaX * 0.005;
-                touchStartX = e.touches[0].clientX;
-            });
-
-            // Gắn sự kiện nút ảo
-            bindTouchBtn('btn-up', 'w');
-            bindTouchBtn('btn-down', 's');
-            bindTouchBtn('btn-left', 'a');
-            bindTouchBtn('btn-right', 'd');
-
-            window.addEventListener('resize', onWindowResize);
-        }
-
-        function bindTouchBtn(id, key) {
-            const btn = document.getElementById(id);
-            btn.addEventListener('touchstart', () => keys[key] = true);
-            btn.addEventListener('touchend', () => keys[key] = false);
-            btn.addEventListener('mousedown', () => keys[key] = true);
-            btn.addEventListener('mouseup', () => keys[key] = false);
-        }
-
-        function handleKey(e, isDown) {
-            switch(e.key.toLowerCase()) {
-                case 'w': case 'arrowup': keys.w = isDown; break;
-                case 's': case 'arrowdown': keys.s = isDown; break;
-                case 'a': case 'arrowleft': keys.a = isDown; break;
-                case 'd': case 'arrowright': keys.d = isDown; break;
-            }
-        }
-
-        // --- QUẢN LÝ CÁC MÀN CHƠI ---
-        function loadStage(stage) {
-            // Xóa vật thể cũ
-            scene.children = scene.children.filter(child => child.isLight);
-            document.getElementById('modal').style.display = 'none';
-
-            if (stage === 1) {
-                document.getElementById('stage-title').innerText = "Màn 1: Đoán Số May Mắn (1 - 10)";
-                createPlayer();
-                showModal("Thử Thách Đoán Số", `
-                    <p>Tôi đang giữ một số bí mật từ 1 đến 10.</p>
-                    <input type="number" id="guess-input" min="1" max="10" placeholder="Nhập số...">
-                    <button class="action-btn" onclick="checkStage1()">Đoán Ngay</button>
-                `);
-            } else if (stage === 2) {
-                document.getElementById('stage-title').innerText = "Màn 2: Sắp Xếp Hình Khối 3D";
-                createPlayer();
-                showModal("Thử Thách Ghép Hình", `
-                    <p>Hãy chọn khối hình khớp với màu xanh lá!</p>
-                    <button class="action-btn" onclick="nextStage()">Hoàn Thành</button>
-                `);
-                // Tạo các khối 3D trực quan
-                let geo = new THREE.BoxGeometry(2,2,2);
-                let mat1 = new THREE.MeshStandardMaterial({color: 0xff0000});
-                let mat2 = new THREE.MeshStandardMaterial({color: 0x00ff00});
-                let m1 = new THREE.Mesh(geo, mat1); m1.position.set(-3, 0, -5); scene.add(m1);
-                let m2 = new THREE.Mesh(geo, mat2); m2.position.set(3, 0, -5); scene.add(m2);
-            } else if (stage === 3) {
-                document.getElementById('stage-title').innerText = "Màn 3: Vượt Chướng Ngại Vật";
-                createPlayer();
-                // Tạo các vật cản
-                for(let i=0; i<5; i++) {
-                    let obs = new THREE.Mesh(new THREE.BoxGeometry(1, 3, 1), new THREE.MeshStandardMaterial({color: 0xff5722}));
-                    obs.position.set((Math.random()-0.5)*10, 0, -10 - (i*5));
-                    scene.add(obs);
-                }
-            } else if (stage === 4) {
-                document.getElementById('stage-title').innerText = "Màn 4: Thoát Khỏi Mê Cung";
-                createPlayer();
-                // Tạo mê cung đơn giản
-                let mazeFloor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({color: 0x333333}));
-                mazeFloor.rotation.x = -Math.PI/2;
-                scene.add(mazeFloor);
-            } else if (stage === 5) {
-                document.getElementById('stage-title').innerText = "Màn 5: Câu Hỏi Hóc Búa Cuối Cùng";
-                showModal("Câu Hỏi Trí Tuệ", `
-                    <p>Cái gì đi bằng 4 chân buổi sáng, 2 chân buổi trưa, và 3 chân buổi chiều?</p>
-                    <input type="text" id="riddle-input" placeholder="Đáp án...">
-                    <button class="action-btn" onclick="checkStage5()">Trả Lời</button>
-                `);
-            }
-        }
-
-        function createPlayer() {
-            const geometry = new THREE.ConeGeometry(0.8, 2, 8);
-            const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
-            player = new THREE.Mesh(geometry, material);
-            player.rotation.x = Math.PI / 2;
-            player.position.set(0, 0, 0);
-            scene.add(player);
-        }
-
-        function showModal(title, content) {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-content').innerHTML = content;
-            document.getElementById('modal').style.display = 'block';
-        }
-
-        // Logic kiểm tra các màn
-        let secretNum = Math.floor(Math.random() * 5) + 1;
-        function checkStage1() {
-            let val = parseInt(document.getElementById('guess-input').value);
-            if (val === secretNum) {
-                alert("Chính xác! Chuyển sang Màn 2.");
-                currentStage = 2;
-                loadStage(currentStage);
-            } else {
-                alert("Sai rồi! Số bí mật là từ 1 đến 5. Thử lại nhé.");
-            }
-        }
-
-        function checkStage5() {
-            let ans = document.getElementById('riddle-input').value.toLowerCase();
-            if (ans.includes("con người") || ans.includes("người")) {
-                alert("Chúc mừng bạn đã phá đảo toàn bộ tựa game 3D!");
-                location.reload();
-            } else {
-                alert("Gợi ý: Đó là một loài sinh vật sống trên Trái Đất!");
-            }
-        }
-
-        function nextStage() {
-            currentStage++;
-            loadStage(currentStage);
-        }
-
-        // Vòng lặp game & xử lý di chuyển vật lý
-        function animate() {
-            requestAnimationFrame(animate);
-
-            if (player) {
-                let speed = 0.1;
-                if (keys.w) player.position.z -= speed;
-                if (keys.s) player.position.z += speed;
-                if (keys.a) player.position.x -= speed;
-                if (keys.d) player.position.x += speed;
-
-                // Camera đi theo nhân vật
-                camera.position.x = player.position.x;
-                camera.position.z = player.position.z + 8;
-
-                // Logic hoàn thành Màn 3 & 4 (Chạy tới đích)
-                if (currentStage === 3 && player.position.z < -25) {
-                    currentStage = 4; loadStage(4);
-                }
-                if (currentStage === 4 && player.position.z < -12) {
-                    currentStage = 5; loadStage(5);
-                }
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-    </script>
-</body>
-</html>
+CSS = """
+<style>
+.title{text-align:center;font-size:2.4rem;font-weight:900;margin:0;line-height:1.2}
+.sub{text-align:center;opacity:.75;margin-top:.2rem}
+.timer{font-size:2.2rem;font-weight:800;text-align:center;border-radius:14px;
+       padding:.2rem 0;letter-spacing:2px;font-variant-numeric:tabular-nums}
+.timer.ok{background:rgba(46,204,113,.15);color:#2ecc71}
+.timer.warn{background:rgba(241,196,15,.15);color:#f1c40f}
+.timer.danger{background:rgba(231,76,60,.18);color:#e74c3c;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.55}}
+.big{font-size:1.7rem;letter-spacing:4px;line-height:2.3rem;margin:.1rem 0}
+.stars{text-align:center;font-size:2.4rem}
+</style>
 """
 
-# Hiển thị game trong ứng dụng Streamlit
-st.components.v1.html(html_code, height=750, scrolling=False)
+
+# ----------------------------------------------------------------------------
+# TIỆN ÍCH
+# ----------------------------------------------------------------------------
+def fmt(sec):
+    sec = max(0, int(sec))
+    return f"{sec // 60:02d}:{sec % 60:02d}"
+
+
+def norm(text):
+    return "".join(text.split()).upper()
+
+
+def time_left(g):
+    ref = g.get("end") or time.time()
+    return g["duration"] - (ref - g["start"]) - g["penalty"]
+
+
+def say(g, msg):
+    g["log"].append(msg)
+
+
+def has(g, item):
+    return item in g["inv"]
+
+
+def give(g, item, msg):
+    if item not in g["inv"]:
+        g["inv"].append(item)
+    say(g, msg)
+
+
+def make_puzzle():
+    """Sinh toàn bộ câu đố ngẫu nhiên cho một lượt chơi."""
+    counts = [random.randint(1, 9) for _ in range(4)]
+    word = random.choice(WORDS)
+    shift = random.randint(2, 5)
+    cipher = "".join(chr((ord(c) - 65 + shift) % 26 + 65) for c in word)
+    riddle = random.choice(RIDDLES)
+    s1, s2 = random.choice(SEQ1), random.choice(SEQ2)
+    return {
+        "counts": counts,
+        "safe": "".join(map(str, counts)),
+        "word": word,
+        "shift": shift,
+        "cipher": cipher,
+        "riddle": riddle,
+        "keypad": "".join(str(d) for _, d in riddle),
+        "seq1": s1,
+        "seq2": s2,
+        "final": f"{s1[1]}{s2[1]}",
+        "surprise": random.choice(["time", "hint", "joke"]),
+    }
+
+
+def start_game(diff, name):
+    secs, hints, _, _ = DIFFICULTY[diff]
+    st.session_state.g = {
+        "phase": "play",
+        "gid": int(time.time() * 1000),
+        "name": name.strip() or "Người bí ẩn",
+        "diff": diff,
+        "duration": secs,
+        "start": time.time(),
+        "end": None,
+        "penalty": 0,
+        "hints": hints,
+        "used_hints": 0,
+        "room": 0,
+        "inv": [],
+        "flags": set(),
+        "log": ["⏳ Cánh cửa sập lại sau lưng bạn. **Đồng hồ bắt đầu chạy!** Hãy khám phá căn phòng."],
+        "P": make_puzzle(),
+    }
+
+
+def calc_score(g):
+    left = max(0, time_left(g))
+    mult = DIFFICULTY[g["diff"]][2]
+    bonus = g["hints"] * 100 + (500 if g["used_hints"] == 0 else 0)
+    return int((left * 10 + bonus) * mult)
+
+
+def calc_stars(g):
+    ratio = max(0, time_left(g)) / g["duration"]
+    return 3 if ratio >= 0.5 else 2 if ratio >= 0.25 else 1
+
+
+def load_scores():
+    try:
+        return json.loads(SCORE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def save_score(entry):
+    scores = load_scores()
+    scores.append(entry)
+    scores.sort(key=lambda e: -e["score"])
+    try:
+        SCORE_FILE.write_text(json.dumps(scores[:50], ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:
+        pass  # môi trường chỉ đọc: bỏ qua
+    return scores.index(entry) + 1
+
+
+def win(g):
+    g["phase"] = "win"
+    g["end"] = time.time()
+    g["score"] = calc_score(g)
+    g["stars"] = calc_stars(g)
+    g["rank"] = save_score(
+        {
+            "name": g["name"],
+            "diff": g["diff"],
+            "score": g["score"],
+            "left": int(max(0, time_left(g))),
+        }
+    )
+
+
+def code_form(key, label, placeholder=""):
+    """Form nhập mã. Trả về None nếu chưa bấm nút, ngược lại là chuỗi đã chuẩn hóa."""
+    with st.form(key, clear_on_submit=True):
+        val = st.text_input(label, placeholder=placeholder, max_chars=12, key=f"{key}_in")
+        sub = st.form_submit_button("Thử", use_container_width=True)
+    return norm(val) if sub else None
+
+
+# ----------------------------------------------------------------------------
+# PHÒNG 1 — THƯ PHÒNG CỔ
+# ----------------------------------------------------------------------------
+def o_painting(g, P):
+    g["flags"].add("seen_painting")
+    st.write("Bức tranh vẽ một khu vườn ban đêm, từng thứ được vẽ rất rõ ràng, như thể ai đó muốn bạn đếm chúng:")
+    for emo, c in zip(EMOJI, P["counts"]):
+        st.markdown(f"<div class='big'>{emo * c}</div>", unsafe_allow_html=True)
+    st.caption("Ở góc tranh có dòng chữ nhỏ: “Đếm theo thứ tự: hoa, chim, sao, trăng.”")
+
+
+def o_shelf(g, P):
+    g["flags"].add("seen_shelf")
+    st.write("Giữa những gáy sách bụi bặm, cuốn **“Julius Caesar”** kẹp một mẩu giấy:")
+    st.info(f"“Muốn đọc mật thư, hãy **lùi {P['shift']} bước** trong bảng chữ cái cho mỗi chữ cái.”")
+    st.caption("Ví dụ lùi 1 bước: C → B, B → A. Lùi quá A thì quay vòng về Z.")
+
+
+def o_safe(g, P):
+    if "safe" in g["flags"]:
+        st.success("Két sắt đã mở. Bên trong trống rỗng.")
+        return
+    st.write("Một chiếc két sắt nặng nề với bàn phím **4 chữ số**.")
+    code = code_form("f_safe", "Mật mã (4 số)", "____")
+    if code is None:
+        return
+    if code == P["safe"]:
+        g["flags"].add("safe")
+        give(g, "Chìa khóa đồng", "🔓 *Cạch!* Két sắt bật mở. Bên trong có một **chìa khóa đồng**.")
+        st.rerun()
+    else:
+        st.error("Két sắt kêu bíp bíp. Sai mã rồi!")
+
+
+def o_desk(g, P):
+    if "drawer" in g["flags"]:
+        st.write("Ngăn kéo đã mở, chỉ còn lại bụi.")
+        return
+    st.write("Chiếc bàn gỗ sồi có một ngăn kéo khóa kín, ổ khóa hình bông hoa.")
+    if has(g, "Chìa khóa đồng"):
+        if st.button("🗝️ Dùng chìa khóa đồng", key="u_key", use_container_width=True):
+            g["flags"].add("drawer")
+            give(g, "Mật thư", "📂 Ngăn kéo mở ra! Bạn tìm thấy một **mật thư** viết bằng mật mã.")
+            st.rerun()
+    else:
+        st.caption("Bạn cần một chiếc chìa khóa phù hợp.")
+
+
+def o_door0(g, P):
+    if "door0" in g["flags"]:
+        st.success("Cánh cửa gỗ đã mở!")
+        if st.button("➡️ Bước sang phòng tiếp theo", key="go1", type="primary", use_container_width=True):
+            g["room"] = 1
+            say(g, "🧪 Bạn bước vào **phòng thí nghiệm**. Mùi hóa chất xộc lên mũi.")
+            st.rerun()
+        return
+    st.write("Cánh cửa gỗ có một bàn phím chữ cái với **6 ô**. Hãy nhập mật khẩu.")
+    pw = code_form("f_door0", "Mật khẩu (6 chữ cái)", "______")
+    if pw is None:
+        return
+    if pw == P["word"]:
+        g["flags"].add("door0")
+        say(g, "🚪 *Click!* Cánh cửa gỗ bật mở. Phía sau là một hành lang sáng đèn.")
+        st.rerun()
+    else:
+        st.error("Bàn phím chớp đỏ. Sai mật khẩu!")
+
+
+# ----------------------------------------------------------------------------
+# PHÒNG 2 — PHÒNG THÍ NGHIỆM
+# ----------------------------------------------------------------------------
+def o_bottles(g, P):
+    if "potion" in g["flags"]:
+        st.success("Bình thủy tinh đã sáng lên với dung dịch phát sáng. Bạn đã giữ nó trong túi.")
+        return
+    st.write("Bốn lọ màu nằm trên bàn, cạnh một bình thủy tinh trống. Tờ ghi chú dán trên bàn viết:")
+    st.info(
+        "• Lọ 🟢 Lục được đổ **ngay sau** lọ 🔴 Đỏ.\n\n"
+        "• Lọ 🔴 Đỏ **không** được đổ đầu tiên.\n\n"
+        "• Lọ 🟡 Vàng **không** đứng đầu và phải đứng **cạnh** lọ 🔵 Xanh dương.\n\n"
+        "• Lọ 🔵 Xanh dương **không** đứng cuối."
+    )
+    with st.form("f_bottles"):
+        cols = st.columns(2)
+        picks = []
+        for i in range(4):
+            with cols[i % 2]:
+                picks.append(
+                    st.selectbox(
+                        f"Lần đổ thứ {i + 1}",
+                        POTION_OPTIONS,
+                        index=None,
+                        placeholder="Chọn lọ…",
+                        key=f"b{g['gid']}_{i}",
+                    )
+                )
+        sub = st.form_submit_button("⚗️ Đổ vào bình", use_container_width=True)
+    if not sub:
+        return
+    if None in picks or len(set(picks)) < 4:
+        st.warning("Hãy chọn đủ 4 lọ, mỗi lọ một lần.")
+    elif picks == POTION_SOLUTION:
+        g["flags"].add("potion")
+        give(g, "Dung dịch phát sáng", "✨ Bình sủi bọt rồi tỏa sáng xanh lơ! Bạn nhận được **dung dịch phát sáng**.")
+        st.rerun()
+    else:
+        st.error("Bình sủi bọt, khói tím bốc lên rồi lặng im. Sai thứ tự!")
+
+
+def o_wall(g, P):
+    f = g["flags"]
+    if "potion" not in f:
+        st.write("Bức tường trắng trơn, nhưng có mùi hóa chất thoang thoảng, như thể có thứ gì đó vô hình trên đó.")
+        return
+    if "wall" not in f:
+        st.write("Bức tường trắng trơn… nhưng dung dịch trong tay bạn đang rung nhẹ.")
+        if st.button("🧪 Rưới dung dịch lên tường", key="u_potion", use_container_width=True):
+            f.add("wall")
+            say(g, "✨ Chữ phát sáng hiện lên trên tường! Đó là **ba câu đố**.")
+            st.rerun()
+        return
+    st.write("Những dòng chữ phát sáng hiện ra trên tường:")
+    for i, (text, _) in enumerate(P["riddle"], 1):
+        st.markdown(f"**{i}.** {text}")
+    st.caption("Ba đáp án (mỗi đáp án một chữ số), ghép theo thứ tự, tạo thành mật mã.")
+
+
+def o_cabinet(g, P):
+    if "cabinet" in g["flags"]:
+        st.success("Tủ đã mở. Bạn đã lấy hết đồ bên trong.")
+        return
+    st.write("Một chiếc tủ kim loại với bảng số **3 chữ số**.")
+    code = code_form("f_cab", "Mật mã (3 số)", "___")
+    if code is None:
+        return
+    if code == P["keypad"]:
+        g["flags"].add("cabinet")
+        for item in ("Thẻ từ", "Bánh răng vàng"):
+            if item not in g["inv"]:
+                g["inv"].append(item)
+        say(g, "🔓 Tủ bật mở! Bên trong có một **thẻ từ** và một **bánh răng vàng**.")
+        st.rerun()
+    else:
+        st.error("Bảng số kêu bíp bíp. Sai mã!")
+
+
+def o_gift(g, P):
+    if "gift" in g["flags"]:
+        st.write("Hộp quà đã trống rỗng.")
+        return
+    st.write("Một hộp quà thắt ruy băng bạc nằm lẻ loi trên sàn. Có thẻ ghi: *“Dành cho kẻ dám mở.”*")
+    if st.button("🎁 Mở hộp quà", key="u_gift", use_container_width=True):
+        g["flags"].add("gift")
+        kind = P["surprise"]
+        if kind == "time":
+            g["penalty"] -= 45
+            say(g, "🎁 **BẤT NGỜ!** Một chiếc đồng hồ cát phép thuật tan vào không khí: bạn được **cộng 45 giây**!")
+        elif kind == "hint":
+            g["hints"] += 1
+            say(g, "🎁 **BẤT NGỜ!** Một con đom đóm giấy bay ra và để lại cho bạn **thêm 1 lượt gợi ý**.")
+        else:
+            say(g, "🎁 **BẤT NGỜ!** Một chú hề lò xo bật ra: *“Bạn có biết vì sao đồng hồ hay đi muộn? Vì nó… tích tắc quá nhiều!”* Không có phần thưởng, chỉ có tiếng cười.")
+        st.rerun()
+
+
+def o_door1(g, P):
+    if "door1" in g["flags"]:
+        st.success("Cửa thép đã mở!")
+        if st.button("➡️ Bước sang phòng tiếp theo", key="go2", type="primary", use_container_width=True):
+            g["room"] = 2
+            say(g, "🕰️ Bạn bước vào **phòng đồng hồ**. Tiếng tích tắc vang khắp nơi.")
+            st.rerun()
+        return
+    st.write("Cánh cửa thép nặng nề, bên cạnh có một khe quẹt thẻ.")
+    if has(g, "Thẻ từ"):
+        if st.button("💳 Quẹt thẻ từ", key="u_card", use_container_width=True):
+            g["flags"].add("door1")
+            say(g, "💚 Đèn xanh bật sáng. Cửa thép trượt mở!")
+            st.rerun()
+    else:
+        st.caption("Bạn cần một tấm thẻ từ.")
+
+
+# ----------------------------------------------------------------------------
+# PHÒNG 3 — PHÒNG ĐỒNG HỒ
+# ----------------------------------------------------------------------------
+def o_clock(g, P):
+    if "clock" in g["flags"]:
+        st.success("Chiếc đồng hồ đã chạy! Chuông gõ vang và một ngăn bí mật bật mở, bên trong có tờ giấy:")
+        st.info(f"**Phần 1 của mã:**  `{P['seq1'][0]}`")
+        return
+    st.write("Chiếc đồng hồ cao ba mét, kim đứng im. Sau mặt kính, một trục trống đang chờ một bánh răng.")
+    if has(g, "Bánh răng vàng"):
+        if st.button("⚙️ Lắp bánh răng vàng", key="u_gear", use_container_width=True):
+            g["flags"].add("clock")
+            say(g, "⚙️ Bánh răng khớp vào! Đồng hồ **bắt đầu chạy**, chuông gõ vang và một ngăn bí mật bật mở.")
+            st.rerun()
+    else:
+        st.caption("Thiếu một bánh răng…")
+
+
+def o_board(g, P):
+    st.write("Trên bảng phấn có dòng chữ: *“Mã mở cửa gồm hai phần ghép nối.”*")
+    st.info(f"**Phần 2 của mã:**  `{P['seq2'][0]}`")
+    st.caption("Phần 1 nằm đâu đó bên trong chiếc đồng hồ…")
+
+
+def o_exit(g, P):
+    st.write(
+        "Cánh cửa thoát hiểm có ô nhập **4 chữ số**: hai số đầu là đáp án dãy số ở **đồng hồ**, "
+        "hai số sau là đáp án dãy số trên **bảng phấn**."
+    )
+    code = code_form("f_exit", "Mã thoát hiểm (4 số)", "____")
+    if code is None:
+        return
+    if code == P["final"]:
+        win(g)
+        st.rerun()
+    else:
+        st.error("Cánh cửa rung lên rồi im lìm. Sai mã!")
+
+
+HANDLERS = {
+    "painting": o_painting, "shelf": o_shelf, "safe": o_safe, "desk": o_desk, "door0": o_door0,
+    "bottles": o_bottles, "wall": o_wall, "cabinet": o_cabinet, "gift": o_gift, "door1": o_door1,
+    "clock": o_clock, "board": o_board, "exit": o_exit,
+}
+
+
+# ----------------------------------------------------------------------------
+# GỢI Ý THEO TIẾN TRÌNH
+# ----------------------------------------------------------------------------
+def current_hint(g, P):
+    f, r = g["flags"], g["room"]
+    if r == 0:
+        if "safe" not in f:
+            if "seen_painting" not in f:
+                return "Hãy nhìn thật kỹ **bức tranh**, có thứ để đếm."
+            return "Đếm từng loại hình trong tranh, ghép 4 số theo thứ tự hoa–chim–sao–trăng để mở **két sắt**."
+        if "drawer" not in f:
+            return "Chìa khóa đồng hợp với ổ khóa của **bàn làm việc**."
+        if "door0" not in f:
+            if "seen_shelf" not in f:
+                return "Hãy xem **giá sách**, có thứ giúp bạn đọc được mật thư."
+            return f"Lùi {P['shift']} bước mỗi chữ cái. Chữ đầu '{P['cipher'][0]}' sẽ thành '{P['word'][0]}'."
+        return "Cửa đã mở, hãy bước sang phòng tiếp theo."
+    if r == 1:
+        if "potion" not in f:
+            return "Lục luôn đứng ngay sau Đỏ, và Đỏ không đứng đầu. Đáp án bắt đầu bằng 🔵 Xanh dương."
+        if "wall" not in f:
+            return "Dung dịch phát sáng có thể làm hiện chữ vô hình trên **bức tường**."
+        if "cabinet" not in f:
+            return "Giải ba câu đố trên tường rồi ghép ba chữ số theo thứ tự cho **tủ khóa số**."
+        if "door1" not in f:
+            return "**Thẻ từ** dùng cho cánh cửa thép."
+        return "Cửa đã mở, hãy bước sang phòng tiếp theo."
+    if "clock" not in f:
+        return "**Bánh răng vàng** thuộc về chiếc đồng hồ."
+    return (
+        f"Quy luật dãy ở đồng hồ: {P['seq1'][2]}. Quy luật dãy trên bảng: {P['seq2'][2]}. "
+        "Mã = đáp án dãy đồng hồ rồi đến đáp án dãy bảng phấn."
+    )
+
+
+# ----------------------------------------------------------------------------
+# MÀN HÌNH
+# ----------------------------------------------------------------------------
+def show_leaderboard():
+    scores = load_scores()[:5]
+    if not scores:
+        st.caption("Bảng vàng còn trống. Hãy là người đầu tiên! 🏆")
+        return
+    st.subheader("🏆 Bảng vàng")
+    st.table(
+        [
+            {"#": i + 1, "Tên": e["name"], "Điểm": e["score"], "Độ khó": e["diff"], "Còn lại": fmt(e["left"])}
+            for i, e in enumerate(scores)
+        ]
+    )
+
+
+def screen_menu():
+    st.markdown("<p class='title'>⏳ Escape Time</p><p class='sub'>Puzzle Games · Bất ngờ mới
