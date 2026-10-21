@@ -2,147 +2,426 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="Streamlit 3D Puzzle Game", layout="wide")
-st.title("🎮 Mini Game 3D Giải Đố - Phong cách Roblox")
-st.markdown("Sử dụng các phím **W, A, S, D** trên bàn phím để di chuyển. **Nhiệm vụ:** Đẩy khối lập phương màu đỏ vào khu vực an toàn màu xanh lá!")
+st.set_page_config(
+    page_title="HER TREES : PUZZLE DREAM - Streamlit",
+    page_icon="🌳",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Mã HTML và JavaScript (Three.js) cho Game 3D
-game_html = """
+# Thêm CSS để tối ưu giao diện Streamlit theo phong cách monochrome
+st.markdown("""
+<style>
+    .main { background-color: #0d0d0d; color: #ffffff; }
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    h1, h2, h3 { color: #ffffff !important; font-family: 'Courier New', Courier, monospace; text-align: center; }
+    p { text-align: center; color: #aaaaaa; font-family: 'Courier New', Courier, monospace; }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🌳 HER TREES : PUZZLE DREAM")
+st.markdown("Một tựa game giải đố trong giấc mơ đen-trắng surrealist. Hãy quan sát, tương tác và tìm mã số mật khẩu để mở cửa giấc mơ.")
+
+# Mã HTML / JavaScript / WebGL Three.js cho game Her Trees
+her_trees_game_html = """
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
+    <meta charset="UTF-8">
     <style>
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; } /* Bầu trời xanh */
-        canvas { display: block; border-radius: 10px; }
-        #ui { 
-            position: absolute; top: 15px; left: 15px; 
-            color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            font-size: 24px; font-weight: bold; 
-            text-shadow: 2px 2px 4px #000; 
-            pointer-events: none;
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { background-color: #050505; color: #eee; font-family: 'Courier New', monospace; overflow: hidden; }
+        
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        canvas { display: block; border: 2px solid #ffffff; }
+
+        /* HUD & Overlay theo phong cách Her Trees (Đen & Trắng) */
+        .ui-panel {
+            position: absolute; top: 20px; left: 20px; color: #fff;
+            background: rgba(0, 0, 0, 0.85); border: 1px solid #fff; padding: 12px 20px;
+            font-size: 14px; letter-spacing: 1px; pointer-events: none; text-transform: uppercase;
+        }
+
+        /* Modal câu đố phòng 1 (Xếp mảnh giấy) */
+        #puzzle-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10;
+        }
+
+        .paper-board {
+            position: relative; width: 340px; height: 340px; border: 2px dashed #fff;
+            background: #111; margin-bottom: 20px;
+        }
+
+        .scrap {
+            position: absolute; width: 100px; height: 100px; border: 2px solid #fff;
+            background: rgba(255,255,255,0.15); cursor: move; display: flex;
+            justify-content: center; align-items: center; font-weight: bold; font-size: 24px; color: #fff;
+        }
+
+        .close-btn {
+            background: #fff; color: #000; border: none; padding: 8px 24px;
+            font-family: inherit; font-weight: bold; cursor: pointer; text-transform: uppercase;
+        }
+        .close-btn:hover { background: #ccc; }
+
+        /* Keypad khóa cửa */
+        #keypad-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10;
+        }
+
+        .keypad-display {
+            width: 200px; height: 45px; background: #000; border: 2px solid #fff;
+            color: #fff; font-size: 24px; text-align: center; line-height: 45px;
+            letter-spacing: 6px; margin-bottom: 15px; font-weight: bold;
+        }
+
+        .keypad-grid { display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; }
+        .key-btn {
+            width: 60px; height: 60px; background: #111; border: 1px solid #fff;
+            color: #fff; font-size: 20px; cursor: pointer; font-family: inherit;
+        }
+        .key-btn:hover { background: #fff; color: #000; }
+
+        #hint-text {
+            position: absolute; bottom: 20px; color: #aaa; font-size: 13px; text-align: center; width: 100%;
         }
     </style>
 </head>
 <body>
-    <div id="ui">Nhiệm vụ: Đẩy khối đỏ vào vùng xanh lá!</div>
-    <!-- Tải thư viện Three.js -->
+    <div id="game-container">
+        <div class="ui-panel">
+            <span id="room-title">DREAM 1: TREE OF SCRAPS</span>
+        </div>
+
+        <!-- Canvas chứa 3D monochrome world -->
+        <div id="canvas-holder"></div>
+
+        <!-- Overlay ghép giấy (Phòng 1) -->
+        <div id="puzzle-overlay">
+            <h3 style="color:#fff; margin-bottom:15px;">KẾT HỢP CÁC MẢNH GIẤY ĐỂ TÌM MẬT MÃ</h3>
+            <div class="paper-board" id="paper-board">
+                <div class="scrap" id="scrap1" style="top:20px; left:20px;">▲<br>9</div>
+                <div class="scrap" id="scrap2" style="top:180px; left:200px;">■<br>4</div>
+                <div class="scrap" id="scrap3" style="top:120px; left:50px;">●<br>7</div>
+            </div>
+            <button class="close-btn" onclick="closePuzzle()">ĐÓNG</button>
+        </div>
+
+        <!-- Overlay Bảng mật mã (Keypad) -->
+        <div id="keypad-overlay">
+            <h3 style="color:#fff; margin-bottom:15px;">NHẬP MẬT MÃ MỞ CỬA</h3>
+            <div class="keypad-display" id="key-display">---</div>
+            <div class="keypad-grid">
+                <button class="key-btn" onclick="pressKey('1')">1</button>
+                <button class="key-btn" onclick="pressKey('2')">2</button>
+                <button class="key-btn" onclick="pressKey('3')">3</button>
+                <button class="key-btn" onclick="pressKey('4')">4</button>
+                <button class="key-btn" onclick="pressKey('5')">5</button>
+                <button class="key-btn" onclick="pressKey('6')">6</button>
+                <button class="key-btn" onclick="pressKey('7')">7</button>
+                <button class="key-btn" onclick="pressKey('8')">8</button>
+                <button class="key-btn" onclick="pressKey('9')">9</button>
+                <button class="key-btn" onclick="pressKey('C')">C</button>
+                <button class="key-btn" onclick="pressKey('0')">0</button>
+                <button class="key-btn" onclick="submitKey()">OK</button>
+            </div>
+            <br>
+            <button class="close-btn" onclick="closeKeypad()">ĐÓNG</button>
+        </div>
+
+        <div id="hint-text">Dùng chuột xoay quan sát không gian. Nhấp vào các vật thể để kiểm tra.</div>
+    </div>
+
+    <!-- Nạp thư viện Three.js & OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
     <script>
-        // 1. Khởi tạo Scene, Camera và Renderer
+        // --- 1. KHỞI TẠO SCENE MONOCHROME ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB); // Màu trời Roblox
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.FogExp2(0x050505, 0.03);
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({antialias: true});
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 9);
 
-        // 2. Thêm Ánh sáng (Lighting)
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(10, 20, 10);
-        scene.add(dirLight);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth * 0.9, 580);
+        document.getElementById('canvas-holder').appendChild(renderer.domElement);
 
-        // 3. Tạo Mặt đất (Sàn nhà)
-        const floorGeo = new THREE.PlaneGeometry(100, 100);
-        const floorMat = new THREE.MeshStandardMaterial({color: 0x4C8B3E}); // Màu cỏ
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2 + 0.1;
 
-        // 4. Tạo Nhân vật người chơi (Khối màu xanh dương)
-        const playerGeo = new THREE.BoxGeometry(1, 1, 1);
-        const playerMat = new THREE.MeshStandardMaterial({color: 0x2A75FF});
-        const player = new THREE.Mesh(playerGeo, playerMat);
-        player.position.set(0, 0.5, 5);
-        scene.add(player);
+        // --- 2. VẬT LIỆU MỰC ĐEN TRẮNG (STYLIZED MONOCHROME) ---
+        const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: false });
+        const blackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
 
-        // 5. Tạo Khối hộp giải đố (Khối màu đỏ cần đẩy)
-        const boxGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-        const boxMat = new THREE.MeshStandardMaterial({color: 0xFF3333});
-        const box = new THREE.Mesh(boxGeo, boxMat);
-        box.position.set(0, 0.75, 0);
-        scene.add(box);
-
-        // 6. Tạo Vùng Đích (Vùng màu xanh lá mờ)
-        const targetGeo = new THREE.BoxGeometry(2.5, 0.1, 2.5);
-        const targetMat = new THREE.MeshStandardMaterial({color: 0x00FF00, transparent: true, opacity: 0.5});
-        const target = new THREE.Mesh(targetGeo, targetMat);
-        target.position.set(0, 0.05, -5);
-        scene.add(target);
-
-        // Đặt góc Camera
-        camera.position.set(0, 6, 10);
-
-        // 7. Hệ thống điều khiển (WASD)
-        const keys = { w: false, a: false, s: false, d: false };
-        window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if(keys.hasOwnProperty(key)) keys[key] = true;
-        });
-        window.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            if(keys.hasOwnProperty(key)) keys[key] = false;
-        });
-
-        // Hàm kiểm tra va chạm bằng Box3
-        function checkCollision(obj1, obj2) {
-            const box1 = new THREE.Box3().setFromObject(obj1);
-            const box2 = new THREE.Box3().setFromObject(obj2);
-            return box1.intersectsBox(box2);
+        function createOutlineMesh(geometry) {
+            const group = new THREE.Group();
+            const mesh = new THREE.Mesh(geometry, blackMat);
+            const edges = new THREE.EdgesGeometry(geometry);
+            const line = new THREE.LineSegments(edges, lineMat);
+            group.add(mesh);
+            group.add(line);
+            return group;
         }
 
-        let gameWon = false;
-        const speed = 0.15;
+        // --- 3. MÀN 1: CÂY GIẤC MƠ VÀ CỬA MẬT MÃ ---
+        let currentLevel = 1;
+        let roomGroup = new THREE.Group();
+        scene.add(roomGroup);
 
-        // 8. Vòng lặp Game (Game Loop)
-        function animate() {
-            requestAnimationFrame(animate);
+        let interactables = [];
 
-            if (!gameWon) {
-                let prevX = player.position.x;
-                let prevZ = player.position.z;
+        function buildLevel1() {
+            roomGroup.clear();
+            interactables = [];
+            document.getElementById('room-title').innerText = "DREAM 1: THE TREE OF SCRAPS";
 
-                // Di chuyển nhân vật
-                if (keys.w) player.position.z -= speed;
-                if (keys.s) player.position.z += speed;
-                if (keys.a) player.position.x -= speed;
-                if (keys.d) player.position.x += speed;
+            // Sàn nhà và tường đen trắng
+            const floorGeo = new THREE.PlaneGeometry(16, 16);
+            const floor = new THREE.Mesh(floorGeo, new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide }));
+            floor.rotation.x = -Math.PI / 2;
+            roomGroup.add(floor);
 
-                // Xử lý va chạm vật lý: Đẩy hộp
-                if (checkCollision(player, box)) {
-                    let dx = player.position.x - prevX;
-                    let dz = player.position.z - prevZ;
-                    box.position.x += dx;
-                    box.position.z += dz;
-                }
+            // Cây Her Trees kỳ dị (Cây khô mực đen trắng)
+            const trunk = createOutlineMesh(new THREE.CylinderGeometry(0.2, 0.5, 5, 8));
+            trunk.position.set(-2, 2.5, -2);
+            roomGroup.add(trunk);
 
-                // Kiểm tra điều kiện thắng (Hộp nằm trong vùng đích)
-                const targetBox = new THREE.Box3().setFromObject(target);
-                const pushBox = new THREE.Box3().setFromObject(box);
-                
-                if (targetBox.intersectsBox(pushBox)) {
-                    document.getElementById('ui').innerHTML = "🎉 Tuyệt vời! Bạn đã vượt qua màn chơi!<br>Nhấn F5 (hoặc Tải lại trang) để chơi lại.";
-                    boxMat.color.setHex(0x00FF00); // Đổi hộp thành màu xanh lá khi thắng
-                    gameWon = true;
-                }
-
-                // Camera đi theo nhân vật mượt mà
-                camera.position.x += (player.position.x - camera.position.x) * 0.1;
-                camera.position.z = player.position.z + 8;
-                camera.lookAt(player.position);
+            for(let i = 0; i < 5; i++) {
+                const branch = createOutlineMesh(new THREE.BoxGeometry(0.1, 1.5, 0.1));
+                branch.position.set(-2 + (Math.random()-0.5)*1.5, 3.5 + i*0.4, -2 + (Math.random()-0.5)*1.5);
+                branch.rotation.z = (Math.random()-0.5);
+                roomGroup.add(branch);
             }
 
+            // Vật thể 1: Bàn chứa mảnh giấy
+            const table = createOutlineMesh(new THREE.BoxGeometry(2, 1.2, 2));
+            table.position.set(-2, 0.6, 1);
+            table.name = "puzzle_paper";
+            roomGroup.add(table);
+            interactables.push(table);
+
+            // Tờ giấy trên bàn
+            const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), whiteMat);
+            paper.rotation.x = -Math.PI/2;
+            paper.position.set(-2, 1.21, 1);
+            roomGroup.add(paper);
+
+            // Cửa mật mã ở tường sau
+            const doorFrame = createOutlineMesh(new THREE.BoxGeometry(2.5, 4.5, 0.2));
+            doorFrame.position.set(2, 2.25, -4);
+            roomGroup.add(doorFrame);
+
+            const keypadPanel = createOutlineMesh(new THREE.BoxGeometry(0.6, 0.8, 0.2));
+            keypadPanel.position.set(3.8, 2, -3.8);
+            keypadPanel.name = "keypad";
+            roomGroup.add(keypadPanel);
+            interactables.push(keypadPanel);
+        }
+
+        buildLevel1();
+
+        // --- 4. TƯƠNG TÁC CHUỘT (RAYCASTING) ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('pointerdown', (event) => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactables, true);
+
+            if (intersects.length > 0) {
+                let clickedObj = intersects[0].object;
+                while (clickedObj.parent && clickedObj.parent !== roomGroup && !clickedObj.name) {
+                    clickedObj = clickedObj.parent;
+                }
+
+                if (clickedObj.name === "puzzle_paper") {
+                    document.getElementById('puzzle-overlay').style.display = "flex";
+                } else if (clickedObj.name === "keypad") {
+                    document.getElementById('keypad-overlay').style.display = "flex";
+                }
+            }
+        });
+
+        // Drag & Drop Mảnh giấy trong Modal Puzzle 1
+        let activeScrap = null;
+        let offsetX = 0, offsetY = 0;
+
+        document.querySelectorAll('.scrap').forEach(scrap => {
+            scrap.addEventListener('mousedown', (e) => {
+                activeScrap = scrap;
+                offsetX = e.clientX - scrap.offsetLeft;
+                offsetY = e.clientY - scrap.offsetTop;
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (activeScrap) {
+                const board = document.getElementById('paper-board').getBoundingClientRect();
+                let x = e.clientX - board.left - 50;
+                let y = e.clientY - board.top - 50;
+                activeScrap.style.left = Math.max(0, Math.min(240, x)) + 'px';
+                activeScrap.style.top = Math.max(0, Math.min(240, y)) + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => { activeScrap = null; });
+
+        function closePuzzle() {
+            document.getElementById('puzzle-overlay').style.display = "none";
+        }
+
+        // --- 5. HỆ THỐNG MẬT MÃ (KEYPAD LOGIC) ---
+        let currentCode = "";
+        const targetCodes = { 1: "749", 2: "318", 3: "808" }; // Mật mã tương ứng các màn
+
+        function pressKey(val) {
+            if (val === 'C') { currentCode = ""; } 
+            else if (currentCode.length < 3) { currentCode += val; }
+            document.getElementById('key-display').innerText = currentCode || "---";
+        }
+
+        function submitKey() {
+            if (currentCode === targetCodes[currentLevel]) {
+                alert("🎉 MẬT MÃ CHÍNH XÁC! CỬA GIẤC MƠ ĐÃ MỞ!");
+                closeKeypad();
+                nextLevel();
+            } else {
+                alert("❌ SAI MẬT MÃ! Hãy quan sát lại các manh mối.");
+                currentCode = "";
+                document.getElementById('key-display').innerText = "---";
+            }
+        }
+
+        function closeKeypad() {
+            document.getElementById('keypad-overlay').style.display = "none";
+            currentCode = "";
+            document.getElementById('key-display').innerText = "---";
+        }
+
+        // --- 6. CHUYỂN MÀN CHƠI (LEVEL PROGRESSION) ---
+        function nextLevel() {
+            currentLevel++;
+            if (currentLevel === 2) {
+                buildLevel2();
+            } else if (currentLevel === 3) {
+                buildLevel3();
+            } else {
+                alert("🌌 BẠN ĐÃ TỈNH GIẤC HOÀN TOÀN! CHÚC MỪNG BẠN ĐÃ HOÀN THÀNH HER TREES: PUZZLE DREAM!");
+                location.reload();
+            }
+        }
+
+        // Màn 2: Xếp khối hình nón con mèo (Cat Cones & Silhouette)
+        function buildLevel2() {
+            roomGroup.clear();
+            interactables = [];
+            document.getElementById('room-title').innerText = "DREAM 2: SILHOUETTE & CAT CONES";
+
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+            floor.rotation.x = -Math.PI / 2;
+            roomGroup.add(floor);
+
+            // Bệ thờ trung tâm
+            const pedestal = createOutlineMesh(new THREE.CylinderGeometry(0.8, 1, 1.5, 6));
+            pedestal.position.set(0, 0.75, 0);
+            roomGroup.add(pedestal);
+
+            // Khối nón con mèo kỳ dị xếp chồng (Mật mã gợi ý: 3 - 1 - 8)
+            const cone1 = createOutlineMesh(new THREE.ConeGeometry(0.6, 1, 4));
+            cone1.position.set(0, 2, 0);
+            roomGroup.add(cone1);
+
+            const cone2 = createOutlineMesh(new THREE.BoxGeometry(0.4, 0.4, 0.4));
+            cone2.position.set(0, 2.7, 0);
+            roomGroup.add(cone2);
+
+            // Bảng gợi ý trên tường
+            const hintBoard = createOutlineMesh(new THREE.PlaneGeometry(3, 2));
+            hintBoard.position.set(0, 3, -4);
+            roomGroup.add(hintBoard);
+
+            // Bảng mật mã màn 2
+            const keypadPanel = createOutlineMesh(new THREE.BoxGeometry(0.6, 0.8, 0.2));
+            keypadPanel.position.set(3, 2, -3.8);
+            keypadPanel.name = "keypad";
+            roomGroup.add(keypadPanel);
+            interactables.push(keypadPanel);
+        }
+
+        // Màn 3: Cây Mắt Surrealist (Eye Tree)
+        function buildLevel3() {
+            roomGroup.clear();
+            interactables = [];
+            document.getElementById('room-title').innerText = "DREAM 3: THE EYE OF AWAKENING";
+
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshBasicMaterial({ color: 0x080808 }));
+            floor.rotation.x = -Math.PI / 2;
+            roomGroup.add(floor);
+
+            // Cây mắt lớn ở trung tâm
+            const trunk = createOutlineMesh(new THREE.CylinderGeometry(0.4, 0.8, 6, 8));
+            trunk.position.set(0, 3, -2);
+            roomGroup.add(trunk);
+
+            // Mắt ma mị đung đưa (Mật mã màn 3: 808)
+            const eyeGeo = new THREE.SphereGeometry(1, 12, 12);
+            const eye = createOutlineMesh(eyeGeo);
+            eye.position.set(0, 4.5, -2);
+            roomGroup.add(eye);
+
+            // Keypad giấc mơ cuối cùng
+            const keypadPanel = createOutlineMesh(new THREE.BoxGeometry(0.8, 1.2, 0.2));
+            keypadPanel.position.set(0, 1.8, 2);
+            keypadPanel.name = "keypad";
+            roomGroup.add(keypadPanel);
+            interactables.push(keypadPanel);
+        }
+
+        // --- 7. GAME LOOP & ANIMATIONS ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
             renderer.render(scene, camera);
         }
         animate();
+
+        // Tự động điều chỉnh kích thước Canvas
+        window.addEventListener('resize', () => {
+            camera.aspect = (window.innerWidth * 0.9) / 580;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth * 0.9, 580);
+        });
     </script>
 </body>
 </html>
 """
 
-# Render HTML game lên Streamlit với chiều cao 600px
-components.html(game_html, height=650, scrolling=False)
+# Render ứng dụng lên Streamlit
+components.html(her_trees_game_html, height=650, scrolling=False)
 
-st.caption("Mẹo: Nhấp chuột vào khu vực game một lần trước khi dùng phím WASD để bắt đầu di chuyển nhân vật.")
+# Phần Hướng Dẫn & Mẹo Chơi
+with st.expander("❓ Hướng dẫn giải đố (Gợi ý cho các Dream)"):
+    st.write("""
+    1. **Màn 1 (Dream 1 - Tree of Scraps):** 
+       * Nhấp chuột vào chiếc bàn bên trái cây để mở bảng xếp mảnh giấy. 
+       * Kéo các mảnh giấy xếp theo thứ tự biểu tượng (Tròn -> Vuông -> Tam giác) để tìm mã 3 chữ số: **749**.
+       * Nhấp vào bảng điều khiển trên tường phải và nhập **749** để qua màn.
+    2. **Màn 2 (Dream 2 - Cat Cones):** 
+       * Mã mở cửa là **318**.
+    3. **Màn 3 (Dream 3 - The Eye):** 
+       * Mã thức tỉnh giấc mơ là **808**.
+    """)
